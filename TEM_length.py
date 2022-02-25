@@ -6,9 +6,9 @@ from sklearn.linear_model import LinearRegression
 # from scipy import special
 
 # Data Preparation Methods
-def exclude_NaN(x_index, length_df):
-    x_data = length_df[x_index][np.logical_not(np.isnan(length_df[x_index]))]
-    y_data = length_df[x_index+1][np.logical_not(np.isnan(length_df[x_index+1]))]
+def exclude_NaN(i, length_df):
+    x_data = length_df[i][np.logical_not(np.isnan(length_df[i]))]
+    y_data = length_df[i+1][np.logical_not(np.isnan(length_df[i+1]))]
     return(x_data, y_data)
 
 # # Smoothing Methods
@@ -61,9 +61,8 @@ def find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_st
 
     """
     # ADD ASSERT FOR DIRECTION
-    # print(f"peak: {mu}")
+
     crossing_point = -1
-    found_crossing_point = False
     step = int(step_size*direction)
     check_point = mu + step
     num_steps = 0
@@ -71,40 +70,30 @@ def find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_st
         sign = 1
     else:
         sign = -1
-    while not found_crossing_point and num_steps < max_steps:
-        # print(f"current check point: {check_point}")
-        # print("checking step")
-        # print(sign*derivative[check_point+step])
-        test_step = check_point+step
-        # Check if the test step is in bounds
-        # print(f"check if test step in bounds: {test_step}")
-        if 0 <= test_step < len(derivative):
-            if sign*derivative[test_step] > 0:
-                # print(f"take step to {test_step}")
-                check_point = test_step
-            else:
-                # print("found crossing point")
-                crossing_point = check_point
-                found_crossing_point = True
-            num_steps += 1
-        else: 
-            # If the test step is out of bounds and the step size is greater than 1
-            # Try using a smaller step size
-            if abs(step) > 1:
-                # print(f"test step out of bounds, smaller steps")
+    while crossing_point < 0 and num_steps < max_steps:
+#         print("checking step")
+#         print(sign*derivative[check_point+step])
+        num_steps += 1
+        if sign*derivative[check_point+step] > 0:
+#             print("take step")
+            check_point = check_point+step
+        else:
+#             print("check next step")
+#             print(sign*derivative[check_point+threshold*step])
+            if sign*derivative[check_point+threshold*step] < 0 and abs(step) > abs(direction):
+#                 print("reset checkpoint")
+                check_point = check_point-step
+#                 print("take smaller steps now")
                 step = direction
-            # If the test step is out of bounds, set the crossing point to the test step
-            else:
-                # print(f"test set out of bounds, set crossing point to check point")
-                found_crossing_point = True
+            elif sign*derivative[check_point+threshold*step] < 0 and abs(step) == abs(direction):
+#                 print("found crossing point")
                 crossing_point = check_point
-
-    # print(f"found crossing point: {found_crossing_point}")
-    # print(f"crossing point: {crossing_point}")
-    # print(f"num steps: {num_steps}")
-    # print(f"checkpoint after while loop: {check_point}")
+            else:
+#                 print("checked next step, take step")
+                check_point = check_point+step
     return crossing_point
 
+<<<<<<< HEAD
 def find_base_zero(x_d1, y_smooth_d1, peak_list, directions_list, base_params):
     # Unpack the parameters
     step_size, threshold, max_steps = base_params
@@ -249,6 +238,19 @@ def find_base_d2(x_d1, y_smooth_d1_s, peak_list, directions_list, base_params):
 #     falling_peak_min = find_zero_crossing(derivative_1, falling_peak_loc, \
 #         step_size, 1, threshold=threshold,max_steps=max_steps)
 #     return(rising_peak_min, rising_peak_max, falling_peak_min, falling_peak_max)
+=======
+def find_min_max_bounds(derivative_1, rising_peak_loc, falling_peak_loc, \
+    step_size, threshold=2, max_steps=20):
+    rising_peak_min = find_zero_crossing(derivative_1, rising_peak_loc, \
+        step_size, -1, threshold=threshold,max_steps=max_steps)
+    rising_peak_max = find_zero_crossing(derivative_1, rising_peak_loc, \
+        step_size, 1, threshold=threshold,max_steps=max_steps)
+    falling_peak_max = find_zero_crossing(derivative_1, falling_peak_loc, \
+        step_size, -1, threshold=threshold,max_steps=max_steps)
+    falling_peak_min = find_zero_crossing(derivative_1, falling_peak_loc, \
+        step_size, 1, threshold=threshold,max_steps=max_steps)
+    return(rising_peak_min, rising_peak_max, falling_peak_min, falling_peak_max)
+>>>>>>> parent of 17f1639... added file processing to TEM_length
 
 
 
@@ -343,12 +345,13 @@ def find_half_max_pos(half_max, half_max_bounds, x_data, y_data):
 
     Returns:
     """
-    slope = (y_data[half_max_bounds[0]]-y_data[half_max_bounds[1]])/(x_data[half_max_bounds[0]]-x_data[half_max_bounds[1]])
+    slope = y_data[half_max_bounds[0]]-y_data[half_max_bounds[1]]/(x_data[half_max_bounds[0]]-x_data[half_max_bounds[1]])
     intercept = y_data[half_max_bounds[0]] - slope*x_data[half_max_bounds[0]]
     half_max_pos = (half_max-intercept)/slope
     return half_max_pos
 
 # Width calculation methods
+<<<<<<< HEAD
 def calculate_width_min_max(x_data, y_data, smooth_func, smooth_params, \
     base_func, base_params, adjust_index):
     # Smooth the function
@@ -550,10 +553,14 @@ def write_measurement_data_serial(custom_name, file_name, width_array):
     with open(f"{file_name}_measurements_{custom_name}.txt", 'w') as data_file:
         for width in width_array:
             data_file.write(f"{width}\t")
+=======
+def calculate_width_min_max(x_data, y_data, smooth_func, smooth_params)
+>>>>>>> parent of 17f1639... added file processing to TEM_length
 
 if __name__ == "__main__":
     # add some arg parse stuff here
 
+<<<<<<< HEAD
     # Hard code some stuff
     smooth_func = signal.savgol_filter
     smooth_params = (21, 3)
@@ -586,10 +593,15 @@ if __name__ == "__main__":
     width_method = "min_max"
     note = ""
 
+=======
+    file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/42hb polyplex no stain xy values length.xlsx"
+    
+>>>>>>> parent of 17f1639... added file processing to TEM_length
     # Read the file in 
-    length_df = pd.read_excel(file_path, header=None,names=None)
+    len_data = pd.read_excel(file_path, header=None,names=None)
 
     # Get the shape
+<<<<<<< HEAD
     rows, cols = length_df.shape
     num_samples = int(cols/2)
     
@@ -695,3 +707,12 @@ if __name__ == "__main__":
     # Write a data file
     write_measurement_data_serial(custom_name, file_name, width_array)
 
+=======
+    rows, cols = len_data.shape
+    print(len_data[1])
+    mean = len_data[1].mean()
+    print(mean)
+    # Iterate through all of the grayscale columns
+    # for i in range(cols/2):
+    #     pass
+>>>>>>> parent of 17f1639... added file processing to TEM_length
