@@ -29,10 +29,9 @@ def find_ring_center(y_smooth, window):
     return (left_bound, right_bound, int((right_bound-left_bound)/2)+left_bound)
 
 # Width calculation methods
-def calculate_ring_min_max(x_data, y_data, smooth_func, smooth_params, \
+def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     base_func, base_params, adjust_index, midpoint_window):
-    # Smooth the function
-    y_smooth = smooth_func(y_data, *smooth_params)
+    
 
     # Find the midpoint of the ring
     left_bound, right_bound, midpoint = find_ring_center(y_smooth, midpoint_window)
@@ -87,6 +86,112 @@ def calculate_ring_min_max(x_data, y_data, smooth_func, smooth_params, \
         widths[1] = calculate_half_max_full_width(x_data, y_smooth, base_loc_arr[4:])
 
     return widths, error_string
+
+# Baseline Fitting Functions
+def fit_ring_baseline(x_data, y_smooth, base_end_arr):
+    # Fit the baseline to straighten the plateaus of the ring
+    left_plateau_baseline_fit, left_bl_slope, left_bl_intercept = fit_plateau_baseline(x_data, y_smooth, base_end_arr[:2])
+    left_x_plateau = x_data[base_end_arr[0]:base_end_arr[1]+1]
+    left_plateau_baseline = left_plateau_baseline_fit(left_x_plateau)
+    
+    right_plateau_baseline_fit, right_bl_slope, right_bl_intercept = fit_plateau_baseline(x_data, y_smooth, base_end_arr[2:])
+    right_x_plateau = x_data[base_end_arr[2]:base_end_arr[3]+1]
+    right_plateau_baseline = right_plateau_baseline_fit(right_x_plateau)
+
+    # Prepare the outer edge data (center them so the base endpoints are at 0,0)
+    # Left side
+    x_left_centered = x_data[:base_end_arr[0]+1] - x_data[base_end_arr[0]]
+    x_left_centered = x_left_centered.values
+    y_smooth_left_centered  = y_smooth[:base_end_arr[0]+1]-y_smooth[base_end_arr[0]]        
+    # Right side
+    x_right_centered = x_data[base_end_arr[3]:] - x_data[base_end_arr[3]]
+    x_right_centered = x_right_centered.values
+    y_smooth_right_centered = y_smooth[base_end_arr[3]:]-y_smooth[base_end_arr[3]]        
+    
+    # Fit left base
+    lm_left = LinearRegression(fit_intercept = False)
+    lm_left.fit(x_left_centered.reshape(-1,1), y_smooth_left_centered)
+    # Fit the right base
+    lm_right = LinearRegression(fit_intercept = False)
+    lm_right.fit(x_right_centered.reshape(-1,1), y_smooth_right_centered)
+
+    # Assemble the baseline correction
+    baseline_correction = np.zeros(len(x_data))
+    baseline_correction[:base_end_arr[0]] = lm_left.predict(x_left_centered[:-1].reshape(-1,1)) +  y_smooth[base_end_arr[0]]
+    baseline_correction[base_end_arr[0]:base_end_arr[1]+1] = left_plateau_baseline
+    baseline_correction[base_end_arr[2]:base_end_arr[3]+1] = right_plateau_baseline
+    baseline_correction[base_end_arr[3]+1:] = lm_right.predict(x_right_centered[1:].reshape(-1,1)) +  y_smooth[base_end_arr[3]]
+
+    # Handle the middle
+    if base_end_arr[1] != base_end_arr[2]:
+        mid_baseline_fit, mid_bl_slope, mid_bl_intercept = fit_plateau_baseline(x_data, y_smooth, base_end_arr[1:3])
+        mid_x = x_data[base_end_arr[1]:base_end_arr[2]+1]
+        mid_baseline = mid_baseline_fit(mid_x)
+        baseline_correction[base_end_arr[1]:base_end_arr[2]+1] = mid_baseline
+    else:
+        pass
+    
+    # Add the baseline correction to the y data
+    y_smooth_blc = y_smooth - baseline_correction
+    return y_smooth_blc, baseline_correction
+
+def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_params, \
+    base_func, base_params, adjust_index, midpoint_window):
+    # Find the midpoint of the ring
+    left_bound, right_bound, midpoint = find_ring_center(y_smooth, midpoint_window)
+
+    # print(f"center point stuff")
+    # print(left_bound, right_bound, midpoint)
+
+    # Calculate the first derivative
+    x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
+    # Smooth the first derivative
+    y_smooth_d1_s = smooth_func(y_smooth_d1, *smooth_params)
+
+    # Find the peaks (hill and valley) of the first derivative
+    left_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:midpoint+1]))[0][0]
+    left_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:midpoint+1]))[0][0]
+    right_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint:-5]))[0][0]
+    right_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint:-5]))[0][0]
+    # print("peaks")
+    # print(f"left: {left_rising_peak_loc_smooth}, {left_falling_peak_loc_smooth}")
+    # print(f"right: {right_rising_peak_loc_smooth}, {right_falling_peak_loc_smooth}")
+    
+    # Store peaks in peak list
+    base_peak_list = [left_rising_peak_loc, left_falling_peak_loc, \
+    right_rising_peak_loc, right_falling_peak_loc]
+
+    base_directions_list = [-1, 1, -1, 1]
+
+    # Find base points of the peaks of the first derivative
+    base_end_arr, error_string, base_string, suprema_string = base_func(x_d1, \
+        y_smooth_d1_s, base_peak_list, base_directions_list, base_params)
+    # print(f"bases: {base_end_arr}")
+    # print(f"base string: {base_string}")
+    # print(f"suprema_string: {suprema_string}")
+
+    # Adjust the indices (for the 2nd derivative method)
+    for i in range(len(suprema_string)):
+        if suprema_string[i] == "1":
+            base_end_arr[i] = base_end_arr[i] + adjust_index
+        else:
+            pass
+
+    if "0" in base_string:
+        error_string = "Baseline correction failed: " + error_string
+        width = np.array([np.nan,np.nan])
+    else:
+        # Perform baseline correction 
+        y_smooth_blc, baseline_correction = fit_ring_baseline(x_data, y_smooth, \
+            base_end_arr)
+
+        # Calculate the half max full width
+        widths, error_string = calculate_ring_min_max(x_data, y_smooth_blc, \
+            smooth_func, smooth_params, base_func, base_params, adjust_index, \
+            midpoint_window)
+
+    return widths, error_string
+
 
 # Writing Output Files
 def write_ring_header(custom_name, file_name, midpoint_window, smooth_method, \
@@ -189,14 +294,26 @@ if __name__ == "__main__":
 
         # print(f"Measurement 1 # data: {len(x_data)}")
         # print(f"Measurement 2 # data: {len(x_data_1)}")    
+
+        # Smooth the data
+        y_smooth = smooth_func(y_data, *smooth_params)
+        y_smooth_1 = smooth_func(y_data_1, *smooth_params)
         
-        # Calculate the widths
-        width, error_string = calculate_ring_min_max(x_data, y_data, \
+        # Calculate the widths (no baseline correction)
+        width, error_string = calculate_ring_min_max(x_data, y_smooth, \
             smooth_func, smooth_params, base_func, base_params, adjust_index, \
             midpoint_window)
-        width_1, error_string_1 = calculate_ring_min_max(x_data_1, y_data_1, \
+        width_1, error_string_1 = calculate_ring_min_max(x_data_1, y_smooth_1, \
             smooth_func, smooth_params, base_func, base_params, adjust_index, \
             midpoint_window)
+
+        # # Calculate the widths (baseline correction)
+        # width, error_string = calculate_ring_baseline_correction(x_data, \
+        #     y_smooth, smooth_func, smooth_params, base_func, base_params, \
+        #     adjust_index, midpoint_window)
+        # width_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
+        #     y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
+        #     adjust_index, midpoint_window)
         
         # Record the data
         width_array[i,:2] = width
@@ -230,27 +347,6 @@ if __name__ == "__main__":
             print(error_message)
         else:
             pass
-        # print(width_array[i,:])
-
-        # # Serial analysis (baseline correction)
-    # for i in range(num_samples):
-    #     print(i)
-    #     # Pick the x columns
-    #     x_index = 2*i
-    #     # Remove the NaN values
-    #     x_data, y_data = exclude_NaN(x_index, length_df)
-    #     # Calculate the width
-    #     width, error_string = calc_width_baseline_correction(x_data, y_data, \
-    #         smooth_func, smooth_params, base_func, base_params, adjust_index)
-    #     # Record the data
-    #     width_array[i] = width
-    #     # Record any errors
-    #     if len(error_string)>0:
-    #         error_message = f"Sample: {i} {error_string}"
-    #         error_list.append(error_message)
-    #         print(error_message)
-    #     else:
-    #         pass
 
     # Calculate the mean, median, and standard deviation
     width_array_clean = width_array[np.logical_not(np.isnan(width_array))]
@@ -265,6 +361,10 @@ if __name__ == "__main__":
 
     # Save the data
     # Write a header file
+    if base_method == "2nd derivative threshold":
+        base_params = (d2_threshold, step_size, threshold, max_steps)
+    else:
+        pass
     write_ring_header(custom_name, file_name, midpoint_window, smooth_method, \
     smooth_params, base_method, base_params, width_method, error_list, \
     summary_stats, note)
