@@ -10,7 +10,8 @@ from TEM_ruler.TEM_length import find_local_value
 from TEM_ruler.TEM_length import find_base_d2
 from TEM_ruler.TEM_length import fit_plateau_baseline
 from TEM_ruler.TEM_length import fit_baseline
-from TEM_ruler.TEM_length import calculate_half_max_full_width
+from TEM_ruler.TEM_length import calculate_half_max_full_width_pos
+# from TEM_ruler.TEM_length import calculate_half_max_full_width
 from TEM_ruler.TEM_length import write_header
 
 
@@ -29,10 +30,25 @@ def find_ring_center(y_smooth, window):
     return (left_bound, right_bound, int((right_bound-left_bound)/2)+left_bound)
 
 # Width calculation methods
+def calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr):
+    widths_array = np.zeros(3)
+
+    left_half_max_positions = \
+    calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr[:4])
+
+    right_half_max_positions = \
+    calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr[4:])
+
+    # Calculate the half max full width
+    widths_array[0] = left_half_max_positions[1] - left_half_max_positions[0]
+    widths_array[1] = right_half_max_positions[1] - right_half_max_positions[0]
+    widths_array[2] = right_half_max_positions[0] - left_half_max_positions[1]
+
+    return widths_array
+
 def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     base_func, base_params, adjust_index, midpoint_window):
     
-
     # Find the midpoint of the ring
     left_bound, right_bound, midpoint = find_ring_center(y_smooth, midpoint_window)
 
@@ -70,7 +86,7 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     # print(f"suprema_string: {suprema_string}")
 
     if "0" in base_string:
-        width = np.array([np.nan,np.nan])
+        widths_array = np.array([np.nan, np.nan, np.nan])
     else:
         # Adjust the indices (for the 2nd derivative method)
         for i in range(len(suprema_string)):
@@ -80,12 +96,10 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
                 pass
         # print(f"adjusted bases: {base_loc_arr}")
 
-        # Calculate the half max full width
-        widths = np.zeros(2)
-        widths[0] = calculate_half_max_full_width(x_data, y_smooth, base_loc_arr[:4])
-        widths[1] = calculate_half_max_full_width(x_data, y_smooth, base_loc_arr[4:])
+        # Calculate the half max full width ring and pore widths
+        widths_array = calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr)
 
-    return widths, error_string
+    return widths_array, error_string
 
 # Baseline Fitting Functions
 def fit_ring_baseline(x_data, y_smooth, base_end_arr):
@@ -179,18 +193,18 @@ def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_par
 
     if "0" in base_string:
         error_string = "Baseline correction failed: " + error_string
-        width = np.array([np.nan,np.nan])
+        widths_array = np.array([np.nan, np.nan, np.nan])
     else:
         # Perform baseline correction 
         y_smooth_blc, baseline_correction = fit_ring_baseline(x_data, y_smooth, \
             base_end_arr)
 
         # Calculate the half max full width
-        widths, error_string = calculate_ring_min_max(x_data, y_smooth_blc, \
+        widths_array, error_string = calculate_ring_min_max(x_data, y_smooth_blc, \
             smooth_func, smooth_params, base_func, base_params, adjust_index, \
             midpoint_window)
 
-    return widths, error_string
+    return widths_array, error_string
 
 
 # Writing Output Files
@@ -199,6 +213,7 @@ def write_ring_header(custom_name, file_name, midpoint_window, smooth_method, \
     summary_stats, note):
     with open(f"{file_name}_header_{custom_name}.txt", 'w') as header_file:
         # Record the calculation methods and settings
+        header_file.write("######## Calculation settings ########\n")
         header_file.write(f"Center finding window size: {midpoint_window}\n")
         header_file.write(f"Smoothing method: {smooth_method}\n")
         header_file.write(f"Smoothing parameters: {smooth_params}\n")
@@ -207,32 +222,53 @@ def write_ring_header(custom_name, file_name, midpoint_window, smooth_method, \
         header_file.write(f"Width calculation method: {width_method}\n")
         header_file.write(f"Note: {note}\n")
         # Unpack the summary stats
-        num_samples, summary_num_samples, summary_num_measurements, \
-        mean, median, stdev = summary_stats
-        header_file.write(f"Summary stats:\n")
-        header_file.write(f"Number of measurements: {num_samples*4}\n")
+        num_samples, num_ring_samples, num_ring_measurements, ring_mean, \
+        ring_std_err, ring_median, ring_sample_stdev , num_pore_samples, \
+        num_pore_measurements, pore_mean, pore_std_err, pore_median, \
+        pore_sample_stdev = summary_stats
+        # Record the summary stats
+        header_file.write(f"\n######## Summary stats ########\n")
         header_file.write(f"Number of samples: {num_samples}\n")
-        header_file.write(f"Number of summary stat measurements: {summary_num_samples}\n")
-        header_file.write(f"Number of summary stat samples: {summary_num_measurements}\n")
-        header_file.write(f"mean: {mean}\n")
-        header_file.write(f"median: {median}\n")
-        header_file.write(f"stdev: {stdev}\n")
-        header_file.write(f"Number of errors: {len(error_list)}\n")
+        header_file.write(f"Number of ring measurements: {num_samples*4}\n")
+        header_file.write(f"Number of pore measurements: {num_samples*2}\n")
+        # Record ring summary stats
+        header_file.write(f"\n#### Ring summary stats ####\n")
+        header_file.write(f"Number of summary samples: {num_ring_samples}\n")
+        header_file.write(f"Number of summary stat measurements: {num_ring_measurements}\n")
+        header_file.write(f"mean: {ring_mean}\n")
+        header_file.write(f"standard error of the mean: {ring_std_err}\n")
+        header_file.write(f"median: {ring_median}\n")
+        header_file.write(f"sample stdev: {ring_sample_stdev}\n")
+        # Record pore summary stats
+        header_file.write(f"\n#### Pore summary stats ####\n")
+        header_file.write(f"Number of summary samples: {num_pore_samples}\n")
+        header_file.write(f"Number of summary stat measurements: {num_pore_measurements}\n")
+        header_file.write(f"mean: {pore_mean}\n")
+        header_file.write(f"standard error of the mean: {pore_std_err}\n")
+        header_file.write(f"median: {pore_median}\n")
+        header_file.write(f"sample stdev: {pore_sample_stdev}\n")
         # Record any errors
-        header_file.write("Errors: \n")
+        header_file.write("\n######## Errors ########\n")
+        header_file.write(f"Number of errors: {len(error_list)}\n")
         for error in error_list:
             header_file.write(f"{error}\n")
 
-def write_ring_measurement_data(custom_name, file_name, width_array, mean_arr, \
-    stdev_arr):
+def write_ring_measurement_data(custom_name, file_name, ring_width_array, ring_mean_arr, \
+    ring_stdev_arr, pore_width_array, pore_mean_arr, pore_stdev_arr):
     with open(f"{file_name}_measurements_{custom_name}.txt", 'w') as data_file:
-        data_file.write("Width 1\tWidth 2\tWidth 3\tWidth 4\tMean\tStd Dev\n")
-        for i in range(len(width_array)):
-            for width in width_array[i,:]:
-                data_file.write(f"{width}\t")
-            data_file.write(f"{mean_arr[i]}\t")
-            data_file.write(f"{stdev_arr[i]}\n")
-
+        for i in range(4):
+            data_file.write(f"Ring Width {i+1}\t")
+        data_file.write(f"Ring Mean\tRing Sample Std Dev\t")
+        data_file.write("Pore Width 1\t Pore Width 2\tPore Mean\tPore Sample Std Dev\n")
+        for i in range(len(ring_width_array)):
+            for ring_width in ring_width_array[i,:]:
+                data_file.write(f"{ring_width}\t")
+            data_file.write(f"{ring_mean_arr[i]}\t")
+            data_file.write(f"{ring_stdev_arr[i]}\t")
+            for pore_width in pore_width_array[i,:]:
+                data_file.write(f"{pore_width}\t")
+            data_file.write(f"{pore_mean_arr[i]}\t")
+            data_file.write(f"{pore_stdev_arr[i]}\n")
 
 if __name__ == "__main__":
     # Add argparse stuff
@@ -257,8 +293,8 @@ if __name__ == "__main__":
     adjust_index = 1
     base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
     base_func = find_base_d2
-    custom_name = "serial_d2_threshold"
-    # custom_name = "serial_d2_threshold_baseline_correction"
+    # custom_name = "serial_d2_threshold"
+    custom_name = "serial_d2_threshold_baseline_correction"
 
 
     # custom_name = "serial"
@@ -276,10 +312,14 @@ if __name__ == "__main__":
     # Get the shape
     rows, cols = length_df.shape
     num_samples = int(cols/4)
+    # num_samples = 2
     
-    width_array = np.zeros((num_samples,4))
-    mean_arr = np.zeros(num_samples)
-    stdev_arr = np.zeros(num_samples)
+    ring_width_array = np.zeros((num_samples,4))
+    pore_width_array = np.zeros((num_samples,2))
+    ring_mean_arr = np.zeros(num_samples)
+    pore_mean_arr = np.zeros(num_samples)
+    ring_sample_stdev_arr = np.zeros(num_samples)
+    pore_sample_stdev_arr = np.zeros(num_samples)
     error_list = []
 
     # Serial analysis (no baseline correction)
@@ -299,40 +339,56 @@ if __name__ == "__main__":
         y_smooth = smooth_func(y_data, *smooth_params)
         y_smooth_1 = smooth_func(y_data_1, *smooth_params)
         
-        # Calculate the widths (no baseline correction)
-        width, error_string = calculate_ring_min_max(x_data, y_smooth, \
-            smooth_func, smooth_params, base_func, base_params, adjust_index, \
-            midpoint_window)
-        width_1, error_string_1 = calculate_ring_min_max(x_data_1, y_smooth_1, \
-            smooth_func, smooth_params, base_func, base_params, adjust_index, \
-            midpoint_window)
+        # # Calculate the widths (no baseline correction)
+        # width_array, error_string = calculate_ring_min_max(x_data, y_smooth, \
+        #     smooth_func, smooth_params, base_func, base_params, adjust_index, \
+        #     midpoint_window)
+        # width_array_1, error_string_1 = calculate_ring_min_max(x_data_1, y_smooth_1, \
+        #     smooth_func, smooth_params, base_func, base_params, adjust_index, \
+        #     midpoint_window)
 
-        # # Calculate the widths (baseline correction)
-        # width, error_string = calculate_ring_baseline_correction(x_data, \
-        #     y_smooth, smooth_func, smooth_params, base_func, base_params, \
-        #     adjust_index, midpoint_window)
-        # width_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
-        #     y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
-        #     adjust_index, midpoint_window)
+        # Calculate the widths (baseline correction)
+        width_array, error_string = calculate_ring_baseline_correction(x_data, \
+            y_smooth, smooth_func, smooth_params, base_func, base_params, \
+            adjust_index, midpoint_window)
+        width_array_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
+            y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
+            adjust_index, midpoint_window)
         
         # Record the data
-        width_array[i,:2] = width
-        width_array[i,2:] = width_1
+        ring_width_array[i,:2] = width_array[:2]
+        ring_width_array[i, 2:] = width_array_1[:2]
+        pore_width_array[i, 0] = width_array[2]
+        pore_width_array[i, 1] = width_array_1[2]
 
         # Calculate mean and standard deviation
-        widths_clean = width_array[i,np.logical_not(np.isnan(width_array[i,:]))]
-        if len(widths_clean) > 1:
-            mean_width = np.mean(widths_clean)
-            stdev_width = np.std(widths_clean)
-        elif len(widths_clean) > 1:
-            mean_width = widths_clean[0]
-            stdev_width = 0 
+        ring_widths_clean = ring_width_array[i,np.logical_not(np.isnan(ring_width_array[i,:]))]
+        pore_widths_clean = pore_width_array[i,np.logical_not(np.isnan(pore_width_array[i,:]))]
+        if len(ring_widths_clean) > 1:
+            ring_width_mean = np.mean(ring_widths_clean)
+            # Finite number of measurements --> compute sample stdev
+            ring_width_sample_stdev = np.std(ring_widths_clean, ddof=1)  
+        elif len(ring_widths_clean) > 1:
+            ring_width_mean = ring_widths_clean[0]
+            ring_width_sample_stdev = 0
         else:
-            mean_width = np.nan 
-            stdev_width = np.nan 
+            ring_width_mean = np.nan 
+            ring_width_sample_stdev = np.nan 
+        if len(pore_widths_clean) > 1:
+            pore_width_mean = np.mean(pore_widths_clean)
+            # Finite number of measurements --> compute sample stdev
+            pore_width_sample_stdev = np.std(pore_widths_clean, ddof=1)  
+        elif len(pore_widths_clean) > 1:
+            pore_width_mean = pore_widths_clean[0]
+            pore_width_sample_stdev = 0
+        else:
+            pore_width_mean = np.nan 
+            pore_width_sample_stdev = np.nan 
         # Record the mean and standard deviation
-        mean_arr[i] = mean_width
-        stdev_arr[i] = stdev_width
+        ring_mean_arr[i] = ring_width_mean
+        ring_sample_stdev_arr[i] = ring_width_sample_stdev
+        pore_mean_arr[i] = pore_width_mean
+        pore_sample_stdev_arr[i] = pore_width_sample_stdev
 
         # Record any errors
         if len(error_string)>0:
@@ -349,15 +405,31 @@ if __name__ == "__main__":
             pass
 
     # Calculate the mean, median, and standard deviation
-    width_array_clean = width_array[np.logical_not(np.isnan(width_array))]
-    mean_arr_clean = mean_arr[np.logical_not(np.isnan(mean_arr))]
-    stdev_arr_clean = stdev_arr[np.logical_not(np.isnan(stdev_arr))]
-    mean = np.mean(mean_arr_clean)
-    median = np.median(mean_arr_clean)
-    stdev = np.sum(np.square(stdev_arr_clean))
+    ring_width_array_clean = ring_width_array[np.logical_not(np.isnan(ring_width_array))]
+    ring_mean_arr_clean = ring_mean_arr[np.logical_not(np.isnan(ring_mean_arr))]
+    ring_sample_stdev_arr_clean = ring_sample_stdev_arr[np.logical_not(np.isnan(ring_sample_stdev_arr))]
+    ring_mean = np.mean(ring_mean_arr_clean)
+    ring_median = np.median(ring_mean_arr_clean)
+    num_ring_samples_clean = len(ring_mean_arr_clean)
+    num_ring_measurements_clean = len(ring_width_array_clean)
+    ring_std_err = np.sqrt(np.sum(np.square(ring_sample_stdev_arr_clean)))/num_ring_samples_clean
+    ring_sample_stdev = np.std(ring_width_array_clean, ddof=1)
+
+    pore_width_array_clean = pore_width_array[np.logical_not(np.isnan(pore_width_array))]
+    pore_mean_arr_clean = pore_mean_arr[np.logical_not(np.isnan(pore_mean_arr))]
+    pore_sample_stdev_arr_clean = pore_sample_stdev_arr[np.logical_not(np.isnan(pore_sample_stdev_arr))]
+    pore_mean = np.mean(pore_mean_arr_clean)
+    pore_median = np.median(pore_mean_arr_clean)
+    num_pore_samples_clean = len(pore_mean_arr_clean)
+    num_pore_measurements_clean = len(pore_width_array_clean)
+    pore_std_err = np.sqrt(np.sum(np.square(pore_sample_stdev_arr_clean)))/num_pore_samples_clean
+    pore_sample_stdev = np.std(pore_width_array_clean, ddof=1)
+    
     # Pack up the stats
-    summary_stats = num_samples, len(width_array_clean), len(mean_arr_clean), \
-    mean, median, stdev 
+    summary_stats = num_samples, num_ring_samples_clean, num_ring_measurements_clean, \
+    ring_mean, ring_std_err, ring_median, ring_sample_stdev , \
+    num_pore_samples_clean, num_pore_measurements_clean, pore_mean, pore_std_err, \
+    pore_median, pore_sample_stdev 
 
     # Save the data
     # Write a header file
@@ -369,5 +441,8 @@ if __name__ == "__main__":
     smooth_params, base_method, base_params, width_method, error_list, \
     summary_stats, note)
     # Write a data file
-    write_ring_measurement_data(custom_name, file_name, width_array, mean_arr, \
-    stdev_arr)
+    write_ring_measurement_data(custom_name, file_name, ring_width_array, \
+        ring_mean_arr, ring_sample_stdev_arr, pore_width_array, pore_mean_arr, \
+        pore_sample_stdev_arr)
+
+    

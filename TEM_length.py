@@ -350,7 +350,7 @@ def find_half_max_pos(half_max, half_max_bounds, x_data, y_data):
     return half_max_pos
 
 # Width calculation methods
-def calculate_half_max_full_width(x_data, y_smooth, base_loc_arr):
+def calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr):
     # print(f"base loc arr: {base_loc_arr}")
     # Figure out the min and max values of the edges
     rising_peak_min = np.min(y_smooth[base_loc_arr[0]:base_loc_arr[1]+1]) 
@@ -383,10 +383,18 @@ def calculate_half_max_full_width(x_data, y_smooth, base_loc_arr):
     # print(f"rising_half_max_pos: {rising_half_max_pos}")
     # print(f"falling_half_max_pos: {falling_half_max_pos}")
 
+    # Calculate the half max full width positions
+    return np.array([rising_half_max_pos, falling_half_max_pos])
+
+def calculate_half_max_full_width(x_data, y_smooth, base_loc_arr):
+    half_max_positions = \
+    calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr)
+
     # Calculate the half max full width
-    width = falling_half_max_pos - rising_half_max_pos
+    width = half_max_positions[1] - half_max_positions[0]
 
     return width
+
 def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     base_func, base_params, adjust_index):
     # Calculate the first derivative
@@ -473,6 +481,7 @@ def write_header(custom_name, file_name, smooth_method, smooth_params, \
     base_method, base_params, width_method, error_list, summary_stats, note):
     with open(f"{file_name}_header_{custom_name}.txt", 'w') as header_file:
         # Record the calculation methods and settings
+        header_file.write("######## Calculation settings ########\n")
         header_file.write(f"Smoothing method: {smooth_method}\n")
         header_file.write(f"Smoothing parameters: {smooth_params}\n")
         header_file.write(f"Base finding method: {base_method}\n")
@@ -480,16 +489,17 @@ def write_header(custom_name, file_name, smooth_method, smooth_params, \
         header_file.write(f"Width calculation method: {width_method}\n")
         header_file.write(f"Note: {note}\n")
         # Unpack the summary stats
-        num_samples, summary_num_samples, mean, median, stdev = summary_stats
-        header_file.write(f"Summary stats:\n")
+        num_samples, summary_num_samples, mean, median, sample_stdev = summary_stats
+        # Record the summary stats
+        header_file.write(f"\n######## Summary stats ########\n")
         header_file.write(f"Number of samples: {num_samples}\n")
         header_file.write(f"Number of summary stat samples: {summary_num_samples}\n")
         header_file.write(f"mean: {mean}\n")
         header_file.write(f"median: {median}\n")
-        header_file.write(f"stdev: {stdev}\n")
-        header_file.write(f"Number of errors: {len(error_list)}\n")
+        header_file.write(f"sample stdev: {sample_stdev}\n")
         # Record any errors
-        header_file.write("Errors: \n")
+        header_file.write("\n######## Errors ########\n")
+        header_file.write(f"Number of errors: {len(error_list)}\n")
         for error in error_list:
             header_file.write(f"{error}\n")
 
@@ -520,8 +530,8 @@ if __name__ == "__main__":
     adjust_index = 1
     base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
     base_func = find_base_d2
-    # custom_name = "serial_d2_threshold_updated"
-    custom_name = "serial_d2_threshold_baseline_correction_updated"
+    custom_name = "serial_d2_threshold_updated"
+    # custom_name = "serial_d2_threshold_baseline_correction_updated"
 
 
     # custom_name = "serial"
@@ -567,27 +577,27 @@ if __name__ == "__main__":
     # else:
     #     pass
 
-    # # Serial analysis (no baseline correction)
-    # for i in range(num_samples):
-    #     print(i)
-    #     # Pick the x columns
-    #     x_index = 2*i
-    #     # Remove the NaN values
-    #     x_data, y_data = exclude_NaN(x_index, length_df)
-    #     # Smooth the function
-    #     y_smooth = smooth_func(y_data, *smooth_params)
-    #     # Calculate the width
-    #     width, error_string = calculate_width_min_max(x_data, y_smooth, \
-    #         smooth_func, smooth_params, base_func, base_params, adjust_index)
-    #     # Record the data
-    #     width_array[i] = width
-    #     # Record any errors
-    #     if len(error_string)>0:
-    #         error_message = f"Sample: {i} {error_string}"
-    #         error_list.append(error_message)
-    #         print(error_message)
-    #     else:
-    #         pass
+    # Serial analysis (no baseline correction)
+    for i in range(num_samples):
+        print(i)
+        # Pick the x columns
+        x_index = 2*i
+        # Remove the NaN values
+        x_data, y_data = exclude_NaN(x_index, length_df)
+        # Smooth the function
+        y_smooth = smooth_func(y_data, *smooth_params)
+        # Calculate the width
+        width, error_string = calculate_width_min_max(x_data, y_smooth, \
+            smooth_func, smooth_params, base_func, base_params, adjust_index)
+        # Record the data
+        width_array[i] = width
+        # Record any errors
+        if len(error_string)>0:
+            error_message = f"Sample: {i} {error_string}"
+            error_list.append(error_message)
+            print(error_message)
+        else:
+            pass
 
     # i = 11
     # # for i in range(13):
@@ -613,35 +623,35 @@ if __name__ == "__main__":
     # else:
     #     pass
 
-    # Serial analysis (baseline correction)
-    for i in range(num_samples):
-        print(i)
-        # Pick the x columns
-        x_index = 2*i
-        # Remove the NaN values
-        x_data, y_data = exclude_NaN(x_index, length_df)
-        # Smooth the function
-        y_smooth = smooth_func(y_data, *smooth_params)
-        # Calculate the width
-        width, error_string = calc_width_baseline_correction(x_data, y_smooth, \
-            smooth_func, smooth_params, base_func, base_params, adjust_index)
-        # Record the data
-        width_array[i] = width
-        # Record any errors
-        if len(error_string)>0:
-            error_message = f"Sample: {i} {error_string}"
-            error_list.append(error_message)
-            print(error_message)
-        else:
-            pass
+    # # Serial analysis (baseline correction)
+    # for i in range(num_samples):
+    #     print(i)
+    #     # Pick the x columns
+    #     x_index = 2*i
+    #     # Remove the NaN values
+    #     x_data, y_data = exclude_NaN(x_index, length_df)
+    #     # Smooth the function
+    #     y_smooth = smooth_func(y_data, *smooth_params)
+    #     # Calculate the width
+    #     width, error_string = calc_width_baseline_correction(x_data, y_smooth, \
+    #         smooth_func, smooth_params, base_func, base_params, adjust_index)
+    #     # Record the data
+    #     width_array[i] = width
+    #     # Record any errors
+    #     if len(error_string)>0:
+    #         error_message = f"Sample: {i} {error_string}"
+    #         error_list.append(error_message)
+    #         print(error_message)
+    #     else:
+    #         pass
 
     # Calculate the mean, median, and standard deviation
     width_array_clean = width_array[np.logical_not(np.isnan(width_array))]
     mean = np.mean(width_array_clean)
     median = np.median(width_array_clean)
-    stdev = np.std(width_array_clean)
+    sample_stdev = np.std(width_array_clean, ddof=1)
     # Pack up the stats
-    summary_stats = num_samples, len(width_array_clean), mean, median, stdev 
+    summary_stats = num_samples, len(width_array_clean), mean, median, sample_stdev 
 
     # Save the data
     # Write a header file
