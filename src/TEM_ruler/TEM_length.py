@@ -509,7 +509,35 @@ def write_measurement_data(custom_name, file_name, width_array):
             data_file.write(f"{width}\t")
 
 if __name__ == "__main__":
-    # add some arg parse stuff here
+    # Argument parser
+    parser = argparse.ArgumentParser(description="Takes in an excel file of TEM \
+        grayscale profiles and computes the lengths of the objects using a half \
+        max full width approach.")
+    parser.add_argument("read_file", type=str, help="The path to the excel file \
+        to analyze.")
+    parser.add_argument("save_name", type=str, help="The name extension to add to \
+        save file names that results are saved to.")
+    parser.add_argument("--baseline", type=str, help="If True, applies a baseline \
+        correction before trying to determine the length. Defaults to False.")
+    parser.add_argument("--settings", type=str, help="The path to the file \
+        containing analysis settings.")
+    # parser.add_argument("--beep", type=int, help="Plays a sound using beepy when \
+    #     the program finishes running. To pick a sound, provide an integer from \
+    #     1-7. To not play a sound, set to 0. Defaults to 1.")
+    args = parser.parse_args()
+
+    # Parse the arguments
+    read_file = args.read_file
+    save_file_name = args.save_name
+
+    true_list = ["True", "true"]
+    if args.baseline and args.baseline in true_list:
+        use_baseline = True
+    else:
+        use_baseline = False
+
+
+    if args.settings:
 
     # Hard code some stuff
     smooth_func = signal.savgol_filter
