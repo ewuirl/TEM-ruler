@@ -1,0 +1,7 @@
+smooth_method = savgol
+smooth_params = (21, 3)
+step_size = 2
+threshold = 2
+max_steps = 20
+width_method = min max
+base_method = 1st derivative zero crossing

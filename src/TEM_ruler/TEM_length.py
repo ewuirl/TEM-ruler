@@ -5,6 +5,8 @@ from scipy import signal
 from sklearn.linear_model import LinearRegression
 # from scipy import special
 
+
+
 # Data Preparation Methods
 def exclude_NaN(x_index, length_df):
     x_data = length_df[x_index][np.logical_not(np.isnan(length_df[x_index]))]
@@ -47,7 +49,8 @@ def check_found_edges(base_loc_arr):
             check_string += "1"
     return check_string
 
-def find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_steps=20):
+def find_zero_crossing(derivative, mu, step_size, direction, \
+    threshold=2, max_steps=20):
     """
     find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_steps=20)
 
@@ -104,7 +107,7 @@ def find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_st
     # print(f"checkpoint after while loop: {check_point}")
     return crossing_point
 
-def find_base_zero(x_d1, y_smooth_d1, peak_list, directions_list, base_params): # Check this
+def find_base_zero(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params): # Check this
     # Unpack the parameters
     step_size, threshold, max_steps = base_params
 
@@ -188,7 +191,8 @@ def find_local_value(target_value, data, start_point, direction, max_steps=20):
             position = check_point
     return position
 
-def find_base_d2(x_d1, y_smooth_d1_s, peak_list, directions_list, base_params):
+def find_base_d2(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, \
+    base_params):
     """
     """
     # Unpack the parameters
@@ -216,7 +220,7 @@ def find_base_d2(x_d1, y_smooth_d1_s, peak_list, directions_list, base_params):
         # If a local supremum was not found, find the base location using the 
         # first derivativezero calculation method
         if supremum_loc_arr[i] < 0:
-            base_loc_arr[i] = find_zero_crossing(y_smooth_d1_s, peak_list[i], \
+            base_loc_arr[i] = find_zero_crossing(y_smooth_d1, peak_list[i], \
                 step_size, directions_list[i], threshold=threshold, \
                 max_steps=max_steps)
         # If a local supremum was found, find the base locatin using the 2nd 
@@ -239,19 +243,6 @@ def find_base_d2(x_d1, y_smooth_d1_s, peak_list, directions_list, base_params):
         error_string = ""
     return(base_loc_arr, error_string, base_string, suprema_string)
 
-# def find_min_max_bounds(derivative_1, rising_peak_loc, falling_peak_loc, \
-#     step_size, threshold=2, max_steps=20):
-#     rising_peak_min = find_zero_crossing(derivative_1, rising_peak_loc, \
-#         step_size, -1, threshold=threshold,max_steps=max_steps)
-#     rising_peak_max = find_zero_crossing(derivative_1, rising_peak_loc, \
-#         step_size, 1, threshold=threshold,max_steps=max_steps)
-#     falling_peak_max = find_zero_crossing(derivative_1, falling_peak_loc, \
-#         step_size, -1, threshold=threshold,max_steps=max_steps)
-#     falling_peak_min = find_zero_crossing(derivative_1, falling_peak_loc, \
-#         step_size, 1, threshold=threshold,max_steps=max_steps)
-#     return(rising_peak_min, rising_peak_max, falling_peak_min, falling_peak_max)
-
-
 
 # Baseline Correction 
 def fit_plateau_baseline(x_data, y_data, base_end_arr):
@@ -262,34 +253,41 @@ def fit_plateau_baseline(x_data, y_data, base_end_arr):
     return plateau_baseline_fit, slope, intercept
 
 def fit_baseline(x_data, y_smooth, base_end_arr):
+    # Create an array to store the baseline correction
+    baseline_correction = np.zeros(len(x_data))
+
     # Fit the baseline to straighten the middle portion
     plateau_baseline_fit, bl_slope, bl_intercept = fit_plateau_baseline(x_data, y_smooth, base_end_arr)
     x_plateau = x_data[base_end_arr[0]:base_end_arr[1]+1]
     plateau_baseline = plateau_baseline_fit(x_plateau)
+    baseline_correction[base_end_arr[0]:base_end_arr[1]+1] = plateau_baseline   
 
-    # Prepare the outer edge data (center them so the base endpoints are at 0,0)
+    
     # Left side
-    x_left_centered = x_data[:base_end_arr[0]+1] - x_data[base_end_arr[0]]
-    x_left_centered = x_left_centered.values
-    y_smooth_left_centered  = y_smooth[:base_end_arr[0]+1]-y_smooth[base_end_arr[0]]
-    # Right side
-    x_right_centered = x_data[base_end_arr[1]:] - x_data[base_end_arr[1]]
-    x_right_centered = x_right_centered.values
-    y_smooth_right_centered = y_smooth[base_end_arr[1]:]-y_smooth[base_end_arr[1]]
-
-    # Fit left base
-    lm_left = LinearRegression(fit_intercept = False)
-    lm_left.fit(x_left_centered.reshape(-1,1), y_smooth_left_centered)
-    # Fit the right base
-    lm_right = LinearRegression(fit_intercept = False)
-    lm_right.fit(x_right_centered.reshape(-1,1), y_smooth_right_centered)
-
-    # Assemble the baseline correction
-    baseline_correction = np.zeros(len(x_data))
-    baseline_correction[:base_end_arr[0]] = lm_left.predict(x_left_centered[:-1].reshape(-1,1)) +  y_smooth[base_end_arr[0]]
-    baseline_correction[base_end_arr[0]:base_end_arr[1]+1] = plateau_baseline
-    baseline_correction[base_end_arr[1]+1:] = lm_right.predict(x_right_centered[1:].reshape(-1,1)) +  y_smooth[base_end_arr[1]]
-
+    if base_end_arr[0] > 0:    
+        # Prepare the outer edge data (center them so the base endpoints are at 0,0)
+        x_left_centered = x_data[:base_end_arr[0]+1] - x_data[base_end_arr[0]]
+        x_left_centered = x_left_centered.values
+        y_smooth_left_centered  = y_smooth[:base_end_arr[0]+1]-y_smooth[base_end_arr[0]]
+        # Fit left base
+        lm_left = LinearRegression(fit_intercept = False)
+        lm_left.fit(x_left_centered.reshape(-1,1), y_smooth_left_centered)
+        baseline_correction[:base_end_arr[0]] = \
+        lm_left.predict(x_left_centered[:-1].reshape(-1,1)) +  y_smooth[base_end_arr[0]]
+    else:
+        pass
+    # Right side    
+    if base_end_arr[1] < len(x_data)-1:    
+        # Prepare the outer edge data (center them so the base endpoints are at 0,0)
+        x_right_centered = x_data[base_end_arr[1]:] - x_data[base_end_arr[1]]
+        x_right_centered = x_right_centered.values
+        y_smooth_right_centered = y_smooth[base_end_arr[1]:]-y_smooth[base_end_arr[1]]
+        # Fit the right base
+        lm_right = LinearRegression(fit_intercept = False)
+        lm_right.fit(x_right_centered.reshape(-1,1), y_smooth_right_centered)
+        baseline_correction[base_end_arr[1]+1:] = \
+        lm_right.predict(x_right_centered[1:].reshape(-1,1)) +  y_smooth[base_end_arr[1]]
+    
     # Add the baseline correction to the y data
     y_smooth_blc = y_smooth - baseline_correction
     return y_smooth_blc, baseline_correction
@@ -414,7 +412,7 @@ def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
 
     # Find base points of the peaks of the first derivative
     base_loc_arr, error_string, base_string, suprema_string = base_func(x_d1, \
-        y_smooth_d1_s, peak_list, directions_list, base_params)
+        y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params)
 
     if "0" in base_string:
         width = np.nan
@@ -449,7 +447,7 @@ def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params,
     base_directions_list = [-1, 1]
     # Find base points of the peaks of the first derivative
     base_end_arr, error_string, base_string, suprema_string = base_func(x_d1, \
-        y_smooth_d1_s, base_peak_list, base_directions_list, base_params)
+        y_smooth_d1, y_smooth_d1_s, base_peak_list, base_directions_list, base_params)
     # print(base_peak_list)
     # print(base_end_arr)
 
@@ -476,6 +474,71 @@ def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params,
 
     return width, error_string
 
+# Reading settings
+def read_TEM_length_settings(settings_path):
+    # Default settings
+    smooth_method = "savgol"
+    smooth_func = signal.savgol_filter
+    smooth_params = (21, 3)
+    width_method = "min_max"
+    base_method = "2nd derivative threshold"
+    base_func = find_base_d2
+    step_size = 2
+    threshold = 2
+    max_steps = 20
+    d2_threshold = 0.5
+    base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
+    # x position of 2nd derivative is shifted by 1 from the x position of 
+    # the TEM profile
+    adjust_index = 1 
+
+    # Handle custom settings
+    if settings_path == "default":
+        pass 
+    else:
+        with open(settings_path, "r") as settings_file:
+            lines = settings_file.readlines()
+            try:
+                for line in lines:
+                    line = line.rstrip("\n")
+                    line_list = line.split(" = ")
+                    if line_list[0] == "smooth_method" and line_list[1] != "default":
+                        smooth_method = line_list[1]
+                    elif line_list[0] == "smooth_params" and line_list[1] != "default":
+                        smooth_params_list = line_list[1].strip("()").split(", ")
+                        smooth_params_list = [int(param) for param in smooth_params_list]
+                        smooth_params = (*smooth_params_list, )
+                    elif line_list[0] == "step_size" and line_list[1] != "default":
+                        step_size = int(line_list[1])
+                    elif line_list[0] == "threshold" and line_list[1] != "default":
+                        threshold = int(line_list[1])
+                    elif line_list[0] == "max_steps" and line_list[1] != "default":
+                        max_steps = int(line_list[1])
+                    elif line_list[0] == "base_method" and line_list[1] != "default":
+                        base_method = line_list[1]
+                    elif line_list[0] == "d2_threshold" and line_list[1] != "default":
+                        d2_threshold = float(line_list[1])
+                    else:
+                        pass
+                # Adjust baseline settings
+                if base_method == "1st derivative zero crossing": 
+                    base_func = find_base_zero
+                    base_params = (step_size, threshold, max_steps)
+                elif base_method == "2nd derivative threshold":
+                    base_func = find_base_d2
+                    base_params = (d2_threshold, step_size, threshold, max_steps, \
+                        smooth_func, smooth_params)
+                else:
+                    raise ValueError("ValueError: Suppled base finding method " \
+                        + "not recognized. Please use '1st derivative zero " \
+                        + "crossing' or '2nd derivative threshold'.")
+            except (ValueError) as msg:
+                print(msg)
+                # Stop the script execution
+                sys.exit(1)
+    return (smooth_method, smooth_func, smooth_params, width_method, base_method, \
+        base_func, base_params, adjust_index)
+
 # Writing Output Files
 def write_header(custom_name, file_name, smooth_method, smooth_params, \
     base_method, base_params, width_method, error_list, summary_stats, note):
@@ -485,6 +548,12 @@ def write_header(custom_name, file_name, smooth_method, smooth_params, \
         header_file.write(f"Smoothing method: {smooth_method}\n")
         header_file.write(f"Smoothing parameters: {smooth_params}\n")
         header_file.write(f"Base finding method: {base_method}\n")
+        if base_method == "2nd derivative threshold":
+            d2_threshold, step_size, threshold, max_steps, smooth_func, \
+            smooth_params = base_params
+            base_params = (d2_threshold, step_size, threshold, max_steps)
+        else:
+            pass
         header_file.write(f"Base finding parameters: {base_params}\n")
         header_file.write(f"Width calculation method: {width_method}\n")
         header_file.write(f"Note: {note}\n")
@@ -508,26 +577,29 @@ def write_measurement_data(custom_name, file_name, width_array):
         for width in width_array:
             data_file.write(f"{width}\t")
 
-if __name__ == "__main__":
+def main():
     # Argument parser
     parser = argparse.ArgumentParser(description="Takes in an excel file of TEM \
         grayscale profiles and computes the lengths of the objects using a half \
         max full width approach.")
-    parser.add_argument("read_file", type=str, help="The path to the excel file \
-        to analyze.")
-    parser.add_argument("save_name", type=str, help="The name extension to add to \
-        save file names that results are saved to.")
-    parser.add_argument("--baseline", type=str, help="If True, applies a baseline \
-        correction before trying to determine the length. Defaults to False.")
-    parser.add_argument("--settings", type=str, help="The path to the file \
-        containing analysis settings.")
-    # parser.add_argument("--beep", type=int, help="Plays a sound using beepy when \
-    #     the program finishes running. To pick a sound, provide an integer from \
-    #     1-7. To not play a sound, set to 0. Defaults to 1.")
+    parser.add_argument("read_file", type=str, \
+        help="The path to the excel file to analyze.")
+    parser.add_argument("save_name", type=str, \
+        help="The name extension to add to save file names that results are saved to.")
+    parser.add_argument("--baseline", type=str, 
+        help="If True, applies a baseline correction before trying to determine the length. Defaults to False.")
+    parser.add_argument("--settings", type=str, \
+        help="The path to the file containing analysis settings.")
+    parser.add_argument("--note", type=str, \
+        help="A note to add to the header file")
+    parser.add_argument("--prog", type=str, \
+        help="If True, prints sample number to terminal as it is being analyzed. Defaults to False")
+
     args = parser.parse_args()
 
     # Parse the arguments
     read_file = args.read_file
+    file_name = read_file.split("/")[-1].split(".")[0]
     save_file_name = args.save_name
 
     true_list = ["True", "true"]
@@ -536,55 +608,89 @@ if __name__ == "__main__":
     else:
         use_baseline = False
 
+    # Get settings
     if args.settings:
-        default_settings = False
         settings_path = args.settings
     else:
-        default_settings = True
+        settings_path = "default"
+    smooth_method, smooth_func, smooth_params, width_method, base_method, \
+    base_func, base_params, adjust_index = read_TEM_length_settings(settings_path)
 
+    # Read in the note
+    if args.note:
+        note = args.note
+    else:
+        note = ""
 
-    # Hard code some stuff
-    smooth_func = signal.savgol_filter
-    smooth_params = (21, 3)
-    d2_threshold = 0.5
-    step_size = 2
-    threshold = 2
-    max_steps = 20
-    # Base finding method
-    # Zero crossing method
-    # base_method = "1st derivative zero crossing"
-    # adjust_index = 0
-    # base_params = (step_size, threshold, max_steps)
-    # base_func = find_base_zero
-    # custom_name = "serial_d1_zero"
-    # 2nd derivative method
-    base_method = "2nd derivative threshold"
-    adjust_index = 1
-    base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
-    base_func = find_base_d2
-    custom_name = "serial_d2_threshold_updated"
-    # custom_name = "serial_d2_threshold_baseline_correction_updated"
-
-
-    # custom_name = "serial"
-    file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/42hb polyplex no stain xy values length.xlsx"
-    # file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/42hb polyplex no stain xy values width.xlsx"
-    file_name = "42hb polyplex no stain xy values length"
-    # file_name = "42hb polyplex no stain xy values width"
-    smooth_method = "savgol"
-    width_method = "min_max"
-    note = ""
+    if args.prog and args.prog in true_list:
+        progress = True
+    else:
+        progress = False
 
     # Read the file in 
-    length_df = pd.read_excel(file_path, header=None,names=None)
+    length_df = pd.read_excel(read_file, header=None, names=None)
 
     # Get the shape
     rows, cols = length_df.shape
     num_samples = int(cols/2)
     
+    # Create array/list to store the widths and errors
     width_array = np.zeros(num_samples)
     error_list = []
 
+    # Serial measurements
+    print("Making measurements.")
+    for i in range(num_samples):
+        if progress:
+            print(i)
+        else:
+            pass
+        # Pick the x columns
+        x_index = 2*i
+        # Remove the NaN values
+        x_data, y_data = exclude_NaN(x_index, length_df)
+        # Smooth the function
+        y_smooth = smooth_func(y_data, *smooth_params)
+        # Calculate the width
+        if use_baseline:
+            width, error_string = calc_width_baseline_correction(x_data, y_smooth, \
+                smooth_func, smooth_params, base_func, base_params, adjust_index)
+        else:
+            width, error_string = calculate_width_min_max(x_data, y_smooth, \
+                smooth_func, smooth_params, base_func, base_params, adjust_index)
+        # Record the data
+        width_array[i] = width
+        # Record any errors
+        if len(error_string)>0:
+            error_message = f"Sample: {i} {error_string}"
+            error_list.append(error_message)
+            print(error_message)
+        else:
+            pass
+
+    # Calculate the mean, median, and standard deviation
+    width_array_clean = width_array[np.logical_not(np.isnan(width_array))]
+    mean = np.mean(width_array_clean)
+    median = np.median(width_array_clean)
+    sample_stdev = np.std(width_array_clean, ddof=1)
+    # Pack up the stats
+    summary_stats = num_samples, len(width_array_clean), mean, median, sample_stdev 
+
+    # Save the data
+    print("Writing header.")
+    # Write a header file
+    write_header(save_file_name, file_name, smooth_method, smooth_params, \
+    base_method, base_params, width_method, error_list, summary_stats, note)
+    
+
+    # Write a data file
+    print("Writing measurement data file.")
+    write_measurement_data(save_file_name, file_name, width_array)
+    print("Finished.")
+
+if __name__ == "__main__":
+    main()
+    
     # i = 11
     # # for i in range(13):
     # print(f"sample {i}")
@@ -609,27 +715,27 @@ if __name__ == "__main__":
     # else:
     #     pass
 
-    # Serial analysis (no baseline correction)
-    for i in range(num_samples):
-        print(i)
-        # Pick the x columns
-        x_index = 2*i
-        # Remove the NaN values
-        x_data, y_data = exclude_NaN(x_index, length_df)
-        # Smooth the function
-        y_smooth = smooth_func(y_data, *smooth_params)
-        # Calculate the width
-        width, error_string = calculate_width_min_max(x_data, y_smooth, \
-            smooth_func, smooth_params, base_func, base_params, adjust_index)
-        # Record the data
-        width_array[i] = width
-        # Record any errors
-        if len(error_string)>0:
-            error_message = f"Sample: {i} {error_string}"
-            error_list.append(error_message)
-            print(error_message)
-        else:
-            pass
+    # # Serial analysis (no baseline correction)
+    # for i in range(num_samples):
+    #     print(i)
+    #     # Pick the x columns
+    #     x_index = 2*i
+    #     # Remove the NaN values
+    #     x_data, y_data = exclude_NaN(x_index, length_df)
+    #     # Smooth the function
+    #     y_smooth = smooth_func(y_data, *smooth_params)
+    #     # Calculate the width
+    #     width, error_string = calculate_width_min_max(x_data, y_smooth, \
+    #         smooth_func, smooth_params, base_func, base_params, adjust_index)
+    #     # Record the data
+    #     width_array[i] = width
+    #     # Record any errors
+    #     if len(error_string)>0:
+    #         error_message = f"Sample: {i} {error_string}"
+    #         error_list.append(error_message)
+    #         print(error_message)
+    #     else:
+    #         pass
 
     # i = 11
     # # for i in range(13):
@@ -655,7 +761,7 @@ if __name__ == "__main__":
     # else:
     #     pass
 
-    # # Serial analysis (baseline correction)
+    # Serial analysis (baseline correction)
     # for i in range(num_samples):
     #     print(i)
     #     # Pick the x columns
@@ -676,22 +782,4 @@ if __name__ == "__main__":
     #         print(error_message)
     #     else:
     #         pass
-
-    # Calculate the mean, median, and standard deviation
-    width_array_clean = width_array[np.logical_not(np.isnan(width_array))]
-    mean = np.mean(width_array_clean)
-    median = np.median(width_array_clean)
-    sample_stdev = np.std(width_array_clean, ddof=1)
-    # Pack up the stats
-    summary_stats = num_samples, len(width_array_clean), mean, median, sample_stdev 
-
-    # Save the data
-    # Write a header file
-    if base_method == "2nd derivative threshold":
-        base_params = (d2_threshold, step_size, threshold, max_steps)
-    else:
-        pass
-    write_header(custom_name, file_name, smooth_method, smooth_params, \
-    base_method, base_params, width_method, error_list, summary_stats, note)
-    # Write a data file
-    write_measurement_data(custom_name, file_name, width_array)
+    # 

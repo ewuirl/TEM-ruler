@@ -1,0 +1,8 @@
+smooth_method = default
+smooth_params = default
+step_size = default
+threshold = default
+max_steps = default
+width_method = default
+base_method = default
+d2_threshold = default
