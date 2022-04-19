@@ -536,8 +536,12 @@ if __name__ == "__main__":
     else:
         use_baseline = False
 
-
     if args.settings:
+        default_settings = False
+        settings_path = args.settings
+    else:
+        default_settings = True
+
 
     # Hard code some stuff
     smooth_func = signal.savgol_filter
