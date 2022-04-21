@@ -350,7 +350,7 @@ def TEM_ring_main():
     parser = argparse.ArgumentParser(description="Takes in an excel file of TEM \
         ring grayscale profiles and computes the widths of the rings and the pores \
         using a half max full width approach.")
-    parser.add_argument("read_file", type=str, \
+    parser.add_argument("read_file_path", type=str, \
         help="The path to the excel file to analyze.")
     parser.add_argument("save_name", type=str, \
         help="The name extension to add to save file names that results are saved to.")
@@ -367,7 +367,7 @@ def TEM_ring_main():
     args = parser.parse_args()
 
     # Parse the arguments
-    read_file = args.read_file
+    read_file_path = args.read_file_path
     file_name = read_file.split("/")[-1].split(".")[0]
     custom_name = args.save_name
 
