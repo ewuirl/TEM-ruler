@@ -368,7 +368,7 @@ def TEM_ring_main():
 
     # Parse the arguments
     read_file_path = args.read_file_path
-    file_name = read_file.split("/")[-1].split(".")[0]
+    file_name = read_file_path.split("/")[-1].split(".")[0]
     custom_name = args.save_name
 
     true_list = ["True", "true"]
