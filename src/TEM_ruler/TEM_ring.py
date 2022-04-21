@@ -1,8 +1,10 @@
+import sys 
 import argparse
 import pandas as pd
 import numpy as np
 from scipy import signal
 from sklearn.linear_model import LinearRegression
+from TEM_ruler.TEM_length import read_TEM_data
 from TEM_ruler.TEM_length import exclude_NaN
 from TEM_ruler.TEM_length import central_diff
 from TEM_ruler.TEM_length import find_zero_crossing
@@ -356,6 +358,8 @@ def TEM_ring_main():
         help="If True, applies a baseline correction before trying to determine the length. Defaults to False.")
     parser.add_argument("--settings", type=str, \
         help="The path to the file containing analysis settings.")
+    parser.add_argument("--transpose", type=str, \
+        help="Set as True if the input data is transposed (each sample is a row). Defaults to False.")
     parser.add_argument("--note", type=str, \
         help="A note to add to the header file")
     parser.add_argument("--prog", type=str, \
@@ -382,6 +386,12 @@ def TEM_ring_main():
     base_func, base_params, adjust_index, midpoint_window = \
     read_TEM_ring_settings(settings_path)
 
+    # Determine if data is transposed
+    if args.transpose and args.transpose in true_list:
+        is_transpose = True
+    else:
+        is_transpose = False
+
     # Read in the note
     if args.note:
         note = args.note
@@ -394,7 +404,7 @@ def TEM_ring_main():
         progress = False
 
     # Read the file in 
-    length_df = pd.read_excel(read_file, header=None,names=None)
+    length_df = read_TEM_data(read_file_path, transpose=is_transpose)
 
     # Get the shape
     rows, cols = length_df.shape
