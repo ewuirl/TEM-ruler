@@ -6,13 +6,12 @@ from sklearn.linear_model import LinearRegression
 from TEM_ruler.TEM_length import exclude_NaN
 from TEM_ruler.TEM_length import central_diff
 from TEM_ruler.TEM_length import find_zero_crossing
+from TEM_ruler.TEM_length import find_base_zero
 from TEM_ruler.TEM_length import find_local_value
 from TEM_ruler.TEM_length import find_base_d2
 from TEM_ruler.TEM_length import fit_plateau_baseline
 from TEM_ruler.TEM_length import fit_baseline
 from TEM_ruler.TEM_length import calculate_half_max_full_width_pos
-# from TEM_ruler.TEM_length import calculate_half_max_full_width
-from TEM_ruler.TEM_length import write_header
 
 
 # Figure out midpoint of ring
@@ -79,7 +78,7 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
 
     # Find base points of the peaks of the first derivative
     base_loc_arr, error_string, base_string, suprema_string = base_func(x_d1, \
-        y_smooth_d1_s, peak_list, directions_list, base_params)
+        y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params)
 
     # print(f"bases: {base_loc_arr}")
     # print(f"base string: {base_string}")
@@ -179,7 +178,8 @@ def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_par
 
     # Find base points of the peaks of the first derivative
     base_end_arr, error_string, base_string, suprema_string = base_func(x_d1, \
-        y_smooth_d1_s, base_peak_list, base_directions_list, base_params)
+        y_smooth_d1, y_smooth_d1_s, base_peak_list, base_directions_list, \
+        base_params)
     # print(f"bases: {base_end_arr}")
     # print(f"base string: {base_string}")
     # print(f"suprema_string: {suprema_string}")
@@ -206,10 +206,77 @@ def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_par
 
     return widths_array, error_string
 
+# Reading settings
+def read_TEM_ring_settings(settings_path):
+    # Default settings
+    smooth_method = "savgol"
+    smooth_func = signal.savgol_filter
+    smooth_params = (9, 3)
+    width_method = "min_max"
+    base_method = "2nd derivative threshold"
+    base_func = find_base_d2
+    step_size = 2
+    threshold = 2
+    max_steps = 20
+    d2_threshold = 2
+    base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
+    # x position of 2nd derivative is shifted by 1 from the x position of 
+    # the TEM profile
+    adjust_index = 1 
+    midpoint_window = 10
+
+    # Handle custom settings
+    if settings_path == "default":
+        pass 
+    else:
+        with open(settings_path, "r") as settings_file:
+            lines = settings_file.readlines()
+            try:
+                for line in lines:
+                    line = line.rstrip("\n")
+                    line_list = line.split(" = ")
+                    if line_list[0] == "smooth_method" and line_list[1] != "default":
+                        smooth_method = line_list[1]
+                    elif line_list[0] == "smooth_params" and line_list[1] != "default":
+                        smooth_params_list = line_list[1].strip("()").split(", ")
+                        smooth_params_list = [int(param) for param in smooth_params_list]
+                        smooth_params = (*smooth_params_list, )
+                    elif line_list[0] == "step_size" and line_list[1] != "default":
+                        step_size = int(line_list[1])
+                    elif line_list[0] == "threshold" and line_list[1] != "default":
+                        threshold = int(line_list[1])
+                    elif line_list[0] == "max_steps" and line_list[1] != "default":
+                        max_steps = int(line_list[1])
+                    elif line_list[0] == "base_method" and line_list[1] != "default":
+                        base_method = line_list[1]
+                    elif line_list[0] == "d2_threshold" and line_list[1] != "default":
+                        d2_threshold = float(line_list[1])
+                    elif line_list[0] == "midpoint_window" and line_list[1] != "default":
+                        midpoint_window = int(line_list[1])
+                    else:
+                        pass
+                # Adjust baseline settings
+                if base_method == "1st derivative zero crossing": 
+                    base_func = find_base_zero
+                    base_params = (step_size, threshold, max_steps)
+                elif base_method == "2nd derivative threshold":
+                    base_func = find_base_d2
+                    base_params = (d2_threshold, step_size, threshold, max_steps, \
+                        smooth_func, smooth_params)
+                else:
+                    raise ValueError("ValueError: Suppled base finding method " \
+                        + "not recognized. Please use '1st derivative zero " \
+                        + "crossing' or '2nd derivative threshold'.")
+            except (ValueError) as msg:
+                print(msg)
+                # Stop the script execution
+                sys.exit(1)
+    return (smooth_method, smooth_func, smooth_params, width_method, base_method, \
+        base_func, base_params, adjust_index, midpoint_window)
 
 # Writing Output Files
-def write_ring_header(custom_name, file_name, midpoint_window, smooth_method, \
-    smooth_params, base_method, base_params, width_method, error_list, \
+def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
+    base_method, base_params, width_method, midpoint_window, error_list, \
     summary_stats, note):
     with open(f"{file_name}_header_{custom_name}.txt", 'w') as header_file:
         # Record the calculation methods and settings
@@ -218,6 +285,12 @@ def write_ring_header(custom_name, file_name, midpoint_window, smooth_method, \
         header_file.write(f"Smoothing method: {smooth_method}\n")
         header_file.write(f"Smoothing parameters: {smooth_params}\n")
         header_file.write(f"Base finding method: {base_method}\n")
+        if base_method == "2nd derivative threshold":
+            d2_threshold, step_size, threshold, max_steps, smooth_func, \
+            smooth_params = base_params
+            base_params = (d2_threshold, step_size, threshold, max_steps)
+        else:
+            pass
         header_file.write(f"Base finding parameters: {base_params}\n")
         header_file.write(f"Width calculation method: {width_method}\n")
         header_file.write(f"Note: {note}\n")
@@ -270,50 +343,64 @@ def write_ring_measurement_data(custom_name, file_name, ring_width_array, ring_m
             data_file.write(f"{pore_mean_arr[i]}\t")
             data_file.write(f"{pore_stdev_arr[i]}\n")
 
-if __name__ == "__main__":
-    # Add argparse stuff
+def TEM_ring_main():
+    # Argument parser
+    parser = argparse.ArgumentParser(description="Takes in an excel file of TEM \
+        ring grayscale profiles and computes the widths of the rings and the pores \
+        using a half max full width approach.")
+    parser.add_argument("read_file", type=str, \
+        help="The path to the excel file to analyze.")
+    parser.add_argument("save_name", type=str, \
+        help="The name extension to add to save file names that results are saved to.")
+    parser.add_argument("--baseline", type=str, 
+        help="If True, applies a baseline correction before trying to determine the length. Defaults to False.")
+    parser.add_argument("--settings", type=str, \
+        help="The path to the file containing analysis settings.")
+    parser.add_argument("--note", type=str, \
+        help="A note to add to the header file")
+    parser.add_argument("--prog", type=str, \
+        help="If True, prints sample number to terminal as it is being analyzed. Defaults to False")
+    args = parser.parse_args()
 
-    # Hard code some stuff
-    midpoint_window = 10
-    smooth_func = signal.savgol_filter
-    smooth_params = (9, 3)
-    d2_threshold = 2
-    step_size = 2
-    threshold = 2
-    max_steps = 20
-    # Base finding method
-    # Zero crossing method
-    # base_method = "1st derivative zero crossing"
-    # adjust_index = 0
-    # base_params = (step_size, threshold, max_steps)
-    # base_func = find_base_zero
-    # custom_name = "serial_d1_zero"
-    # 2nd derivative method
-    base_method = "2nd derivative threshold"
-    adjust_index = 1
-    base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
-    base_func = find_base_d2
-    # custom_name = "serial_d2_threshold"
-    custom_name = "serial_d2_threshold_baseline_correction"
+    # Parse the arguments
+    read_file = args.read_file
+    file_name = read_file.split("/")[-1].split(".")[0]
+    custom_name = args.save_name
 
+    true_list = ["True", "true"]
+    if args.baseline and args.baseline in true_list:
+        use_baseline = True
+    else:
+        use_baseline = False
 
-    # custom_name = "serial"
-    # file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/42hb polyplex no stain xy values length.xlsx"
-    file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/xy dimensions ring 125x silica.xlsx"
-    # file_name = "42hb polyplex no stain xy values length"
-    file_name = "xy dimensions ring 125x silica"
-    smooth_method = "savgol"
-    width_method = "min_max"
-    note = ""
+    # Get settings
+    if args.settings:
+        settings_path = args.settings
+    else:
+        settings_path = "default"
+    smooth_method, smooth_func, smooth_params, width_method, base_method, \
+    base_func, base_params, adjust_index, midpoint_window = \
+    read_TEM_ring_settings(settings_path)
+
+    # Read in the note
+    if args.note:
+        note = args.note
+    else:
+        note = ""
+
+    if args.prog and args.prog in true_list:
+        progress = True
+    else:
+        progress = False
 
     # Read the file in 
-    length_df = pd.read_excel(file_path, header=None,names=None)
+    length_df = pd.read_excel(read_file, header=None,names=None)
 
     # Get the shape
     rows, cols = length_df.shape
     num_samples = int(cols/4)
-    # num_samples = 2
     
+    # Arrays to store data and calculations in 
     ring_width_array = np.zeros((num_samples,4))
     pore_width_array = np.zeros((num_samples,2))
     ring_mean_arr = np.zeros(num_samples)
@@ -322,9 +409,13 @@ if __name__ == "__main__":
     pore_sample_stdev_arr = np.zeros(num_samples)
     error_list = []
 
-    # Serial analysis (no baseline correction)
+    # Serial measurements
+    print("Making measurements.")
     for i in range(num_samples):
-        print(i)
+        if progress:
+            print(i)
+        else:
+            pass
         # Pick the x columns
         x_index = 2*i
         
@@ -339,21 +430,22 @@ if __name__ == "__main__":
         y_smooth = smooth_func(y_data, *smooth_params)
         y_smooth_1 = smooth_func(y_data_1, *smooth_params)
         
-        # # Calculate the widths (no baseline correction)
-        # width_array, error_string = calculate_ring_min_max(x_data, y_smooth, \
-        #     smooth_func, smooth_params, base_func, base_params, adjust_index, \
-        #     midpoint_window)
-        # width_array_1, error_string_1 = calculate_ring_min_max(x_data_1, y_smooth_1, \
-        #     smooth_func, smooth_params, base_func, base_params, adjust_index, \
-        #     midpoint_window)
-
-        # Calculate the widths (baseline correction)
-        width_array, error_string = calculate_ring_baseline_correction(x_data, \
-            y_smooth, smooth_func, smooth_params, base_func, base_params, \
-            adjust_index, midpoint_window)
-        width_array_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
-            y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
-            adjust_index, midpoint_window)
+        if use_baseline:
+            # Calculate the widths (baseline correction)
+            width_array, error_string = calculate_ring_baseline_correction(x_data, \
+                y_smooth, smooth_func, smooth_params, base_func, base_params, \
+                adjust_index, midpoint_window)
+            width_array_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
+                y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
+                adjust_index, midpoint_window)
+        else:
+            # Calculate the widths (no baseline correction)
+            width_array, error_string = calculate_ring_min_max(x_data, y_smooth, \
+                smooth_func, smooth_params, base_func, base_params, adjust_index, \
+                midpoint_window)
+            width_array_1, error_string_1 = calculate_ring_min_max(x_data_1, \
+                y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
+                adjust_index, midpoint_window)
         
         # Record the data
         ring_width_array[i,:2] = width_array[:2]
@@ -384,6 +476,7 @@ if __name__ == "__main__":
         else:
             pore_width_mean = np.nan 
             pore_width_sample_stdev = np.nan 
+
         # Record the mean and standard deviation
         ring_mean_arr[i] = ring_width_mean
         ring_sample_stdev_arr[i] = ring_width_sample_stdev
@@ -433,16 +526,187 @@ if __name__ == "__main__":
 
     # Save the data
     # Write a header file
-    if base_method == "2nd derivative threshold":
-        base_params = (d2_threshold, step_size, threshold, max_steps)
-    else:
-        pass
-    write_ring_header(custom_name, file_name, midpoint_window, smooth_method, \
-    smooth_params, base_method, base_params, width_method, error_list, \
-    summary_stats, note)
+    print("Writing header.")
+    write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
+        base_method, base_params, width_method, midpoint_window, error_list, \
+        summary_stats, note)
     # Write a data file
+    print("Writing measurement data file.")
     write_ring_measurement_data(custom_name, file_name, ring_width_array, \
         ring_mean_arr, ring_sample_stdev_arr, pore_width_array, pore_mean_arr, \
         pore_sample_stdev_arr)
+    print("Finished.")
+
+if __name__ == "__main__":
+    TEM_ring_main()
+    # Add argparse stuff
+
+    # # Hard code some stuff
+    # midpoint_window = 10
+    # smooth_func = signal.savgol_filter
+    # smooth_params = (9, 3)
+    # d2_threshold = 2
+    # step_size = 2
+    # threshold = 2
+    # max_steps = 20
+    # Base finding method
+    # Zero crossing method
+    # base_method = "1st derivative zero crossing"
+    # adjust_index = 0
+    # base_params = (step_size, threshold, max_steps)
+    # base_func = find_base_zero
+    # custom_name = "serial_d1_zero"
+    # 2nd derivative method
+    # base_method = "2nd derivative threshold"
+    # adjust_index = 1
+    # base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
+    # base_func = find_base_d2
+    # custom_name = "serial_d2_threshold"
+    # custom_name = "serial_d2_threshold_baseline_correction"
+
+
+    # custom_name = "serial"
+    # file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/42hb polyplex no stain xy values length.xlsx"
+    # file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/xy dimensions ring 125x silica.xlsx"
+    # file_name = "42hb polyplex no stain xy values length"
+    # file_name = "xy dimensions ring 125x silica"
+    # smooth_method = "savgol"
+    # width_method = "min_max"
+    # note = ""
+
+    # # Read the file in 
+    # length_df = pd.read_excel(file_path, header=None,names=None)
+
+    # # Get the shape
+    # rows, cols = length_df.shape
+    # num_samples = int(cols/4)
+    # # num_samples = 2
+    
+    # ring_width_array = np.zeros((num_samples,4))
+    # pore_width_array = np.zeros((num_samples,2))
+    # ring_mean_arr = np.zeros(num_samples)
+    # pore_mean_arr = np.zeros(num_samples)
+    # ring_sample_stdev_arr = np.zeros(num_samples)
+    # pore_sample_stdev_arr = np.zeros(num_samples)
+    # error_list = []
+
+    # Serial analysis (no baseline correction)
+    # for i in range(num_samples):
+    #     print(i)
+    #     # Pick the x columns
+    #     x_index = 2*i
+        
+    #     # Remove the NaN values
+    #     x_data, y_data = exclude_NaN(x_index, length_df)
+    #     x_data_1, y_data_1 = exclude_NaN(x_index+2, length_df)
+
+    #     # print(f"Measurement 1 # data: {len(x_data)}")
+    #     # print(f"Measurement 2 # data: {len(x_data_1)}")    
+
+    #     # Smooth the data
+    #     y_smooth = smooth_func(y_data, *smooth_params)
+    #     y_smooth_1 = smooth_func(y_data_1, *smooth_params)
+        
+    #     # # Calculate the widths (no baseline correction)
+    #     # width_array, error_string = calculate_ring_min_max(x_data, y_smooth, \
+    #     #     smooth_func, smooth_params, base_func, base_params, adjust_index, \
+    #     #     midpoint_window)
+    #     # width_array_1, error_string_1 = calculate_ring_min_max(x_data_1, y_smooth_1, \
+    #     #     smooth_func, smooth_params, base_func, base_params, adjust_index, \
+    #     #     midpoint_window)
+
+    #     # Calculate the widths (baseline correction)
+    #     width_array, error_string = calculate_ring_baseline_correction(x_data, \
+    #         y_smooth, smooth_func, smooth_params, base_func, base_params, \
+    #         adjust_index, midpoint_window)
+    #     width_array_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
+    #         y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
+    #         adjust_index, midpoint_window)
+        
+    #     # Record the data
+    #     ring_width_array[i,:2] = width_array[:2]
+    #     ring_width_array[i, 2:] = width_array_1[:2]
+    #     pore_width_array[i, 0] = width_array[2]
+    #     pore_width_array[i, 1] = width_array_1[2]
+
+    #     # Calculate mean and standard deviation
+    #     ring_widths_clean = ring_width_array[i,np.logical_not(np.isnan(ring_width_array[i,:]))]
+    #     pore_widths_clean = pore_width_array[i,np.logical_not(np.isnan(pore_width_array[i,:]))]
+    #     if len(ring_widths_clean) > 1:
+    #         ring_width_mean = np.mean(ring_widths_clean)
+    #         # Finite number of measurements --> compute sample stdev
+    #         ring_width_sample_stdev = np.std(ring_widths_clean, ddof=1)  
+    #     elif len(ring_widths_clean) > 1:
+    #         ring_width_mean = ring_widths_clean[0]
+    #         ring_width_sample_stdev = 0
+    #     else:
+    #         ring_width_mean = np.nan 
+    #         ring_width_sample_stdev = np.nan 
+    #     if len(pore_widths_clean) > 1:
+    #         pore_width_mean = np.mean(pore_widths_clean)
+    #         # Finite number of measurements --> compute sample stdev
+    #         pore_width_sample_stdev = np.std(pore_widths_clean, ddof=1)  
+    #     elif len(pore_widths_clean) > 1:
+    #         pore_width_mean = pore_widths_clean[0]
+    #         pore_width_sample_stdev = 0
+    #     else:
+    #         pore_width_mean = np.nan 
+    #         pore_width_sample_stdev = np.nan 
+    #     # Record the mean and standard deviation
+    #     ring_mean_arr[i] = ring_width_mean
+    #     ring_sample_stdev_arr[i] = ring_width_sample_stdev
+    #     pore_mean_arr[i] = pore_width_mean
+    #     pore_sample_stdev_arr[i] = pore_width_sample_stdev
+
+    #     # Record any errors
+    #     if len(error_string)>0:
+    #         error_message = f"Sample: {i}, Measurement: 1, {error_string}"
+    #         error_list.append(error_message)
+    #         print(error_message)
+    #     else:
+    #         pass
+    #     if len(error_string_1)>0:
+    #         error_message = f"Sample: {i}, Measurement: 2, {error_string_1}"
+    #         error_list.append(error_string_1)
+    #         print(error_message)
+    #     else:
+    #         pass
+
+    # # Calculate the mean, median, and standard deviation
+    # ring_width_array_clean = ring_width_array[np.logical_not(np.isnan(ring_width_array))]
+    # ring_mean_arr_clean = ring_mean_arr[np.logical_not(np.isnan(ring_mean_arr))]
+    # ring_sample_stdev_arr_clean = ring_sample_stdev_arr[np.logical_not(np.isnan(ring_sample_stdev_arr))]
+    # ring_mean = np.mean(ring_mean_arr_clean)
+    # ring_median = np.median(ring_mean_arr_clean)
+    # num_ring_samples_clean = len(ring_mean_arr_clean)
+    # num_ring_measurements_clean = len(ring_width_array_clean)
+    # ring_std_err = np.sqrt(np.sum(np.square(ring_sample_stdev_arr_clean)))/num_ring_samples_clean
+    # ring_sample_stdev = np.std(ring_width_array_clean, ddof=1)
+
+    # pore_width_array_clean = pore_width_array[np.logical_not(np.isnan(pore_width_array))]
+    # pore_mean_arr_clean = pore_mean_arr[np.logical_not(np.isnan(pore_mean_arr))]
+    # pore_sample_stdev_arr_clean = pore_sample_stdev_arr[np.logical_not(np.isnan(pore_sample_stdev_arr))]
+    # pore_mean = np.mean(pore_mean_arr_clean)
+    # pore_median = np.median(pore_mean_arr_clean)
+    # num_pore_samples_clean = len(pore_mean_arr_clean)
+    # num_pore_measurements_clean = len(pore_width_array_clean)
+    # pore_std_err = np.sqrt(np.sum(np.square(pore_sample_stdev_arr_clean)))/num_pore_samples_clean
+    # pore_sample_stdev = np.std(pore_width_array_clean, ddof=1)
+    
+    # # Pack up the stats
+    # summary_stats = num_samples, num_ring_samples_clean, num_ring_measurements_clean, \
+    # ring_mean, ring_std_err, ring_median, ring_sample_stdev , \
+    # num_pore_samples_clean, num_pore_measurements_clean, pore_mean, pore_std_err, \
+    # pore_median, pore_sample_stdev 
+
+    # # Save the data
+    # # Write a header file
+    # write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
+    #     base_method, base_params, width_method, midpoint_window, error_list, \
+    #     summary_stats, note)
+    # # Write a data file
+    # write_ring_measurement_data(custom_name, file_name, ring_width_array, \
+    #     ring_mean_arr, ring_sample_stdev_arr, pore_width_array, pore_mean_arr, \
+    #     pore_sample_stdev_arr)
 
     

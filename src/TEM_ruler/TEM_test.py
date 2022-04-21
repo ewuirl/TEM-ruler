@@ -3,7 +3,7 @@ import argparse
 def simple_test_func():
     print("potato")
 
-def main():
+def test_main():
     # Argument parser
     parser = argparse.ArgumentParser(description="Test running from the command line")
     parser.add_argument("print_string", type=str, help="thing to print")
@@ -16,7 +16,7 @@ def main():
         file.write(print_string)
 
 if __name__ == "__main__":
-    main()
+    test_main()
 #     # Argument parser
 #     parser = argparse.ArgumentParser(description="Test running from the command line")
 #     parser.add_argument("print_string", type=str, help="thing to print")

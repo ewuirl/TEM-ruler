@@ -3,17 +3,12 @@ import pandas as pd
 import numpy as np
 from scipy import signal
 from sklearn.linear_model import LinearRegression
-# from scipy import special
-
-
 
 # Data Preparation Methods
 def exclude_NaN(x_index, length_df):
     x_data = length_df[x_index][np.logical_not(np.isnan(length_df[x_index]))]
     y_data = length_df[x_index+1][np.logical_not(np.isnan(length_df[x_index+1]))]
     return(x_data, y_data)
-
-# # Smoothing Methods
 
 # Derivative Methods
 def central_diff(x_vals, y_vals):
@@ -35,7 +30,6 @@ def central_diff(x_vals, y_vals):
         diffs[i] = (y_vals[i+1]-y_vals[i])/(x_vals[i+1]-x_vals[i])
         x_diffs[i] = (x_vals[i+1]-x_vals[i])/2+x_vals[i]
     return(x_diffs, diffs)
-
 
 # Finding Edge Boundaries
 # # Min Max Method
@@ -577,7 +571,7 @@ def write_measurement_data(custom_name, file_name, width_array):
         for width in width_array:
             data_file.write(f"{width}\t")
 
-def main():
+def TEM_length_main():
     # Argument parser
     parser = argparse.ArgumentParser(description="Takes in an excel file of TEM \
         grayscale profiles and computes the lengths of the objects using a half \
@@ -600,7 +594,7 @@ def main():
     # Parse the arguments
     read_file = args.read_file
     file_name = read_file.split("/")[-1].split(".")[0]
-    save_file_name = args.save_name
+    custom_name = args.save_name
 
     true_list = ["True", "true"]
     if args.baseline and args.baseline in true_list:
@@ -679,17 +673,17 @@ def main():
     # Save the data
     print("Writing header.")
     # Write a header file
-    write_header(save_file_name, file_name, smooth_method, smooth_params, \
+    write_header(custom_name, file_name, smooth_method, smooth_params, \
     base_method, base_params, width_method, error_list, summary_stats, note)
     
 
     # Write a data file
     print("Writing measurement data file.")
-    write_measurement_data(save_file_name, file_name, width_array)
+    write_measurement_data(custom_name, file_name, width_array)
     print("Finished.")
 
 if __name__ == "__main__":
-    main()
+    TEM_length_main()
     
     # i = 11
     # # for i in range(13):
