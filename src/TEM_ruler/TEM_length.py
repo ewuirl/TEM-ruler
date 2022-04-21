@@ -27,7 +27,6 @@ def read_TEM_data(read_file_path, transpose=False):
         else:
             pass
 
-        print(length_df[0])
         return length_df
 
     except(FileInputError) as msg:
@@ -663,63 +662,63 @@ def TEM_length_main():
     # Read the file in 
     length_df = read_TEM_data(read_file_path, transpose=is_transpose)
 
-    # # Get the shape
-    # rows, cols = length_df.shape
-    # num_samples = int(cols/2)
+    # Get the shape
+    rows, cols = length_df.shape
+    num_samples = int(cols/2)
     
-    # # Create array/list to store the widths and errors
-    # width_array = np.zeros(num_samples)
-    # error_list = []
+    # Create array/list to store the widths and errors
+    width_array = np.zeros(num_samples)
+    error_list = []
 
-    # # Serial measurements
-    # print("Making measurements.")
-    # for i in range(num_samples):
-    #     if progress:
-    #         print(i)
-    #     else:
-    #         pass
-    #     # Pick the x columns
-    #     x_index = 2*i
-    #     # Remove the NaN values
-    #     x_data, y_data = exclude_NaN(x_index, length_df)
-    #     # Smooth the function
-    #     y_smooth = smooth_func(y_data, *smooth_params)
-    #     # Calculate the width
-    #     if use_baseline:
-    #         width, error_string = calc_width_baseline_correction(x_data, y_smooth, \
-    #             smooth_func, smooth_params, base_func, base_params, adjust_index)
-    #     else:
-    #         width, error_string = calculate_width_min_max(x_data, y_smooth, \
-    #             smooth_func, smooth_params, base_func, base_params, adjust_index)
-    #     # Record the data
-    #     width_array[i] = width
-    #     # Record any errors
-    #     if len(error_string)>0:
-    #         error_message = f"Sample: {i} {error_string}"
-    #         error_list.append(error_message)
-    #         print(error_message)
-    #     else:
-    #         pass
+    # Serial measurements
+    print("Making measurements.")
+    for i in range(num_samples):
+        if progress:
+            print(i)
+        else:
+            pass
+        # Pick the x columns
+        x_index = 2*i
+        # Remove the NaN values
+        x_data, y_data = exclude_NaN(x_index, length_df)
+        # Smooth the function
+        y_smooth = smooth_func(y_data, *smooth_params)
+        # Calculate the width
+        if use_baseline:
+            width, error_string = calc_width_baseline_correction(x_data, y_smooth, \
+                smooth_func, smooth_params, base_func, base_params, adjust_index)
+        else:
+            width, error_string = calculate_width_min_max(x_data, y_smooth, \
+                smooth_func, smooth_params, base_func, base_params, adjust_index)
+        # Record the data
+        width_array[i] = width
+        # Record any errors
+        if len(error_string)>0:
+            error_message = f"Sample: {i} {error_string}"
+            error_list.append(error_message)
+            print(error_message)
+        else:
+            pass
 
-    # # Calculate the mean, median, and standard deviation
-    # width_array_clean = width_array[np.logical_not(np.isnan(width_array))]
-    # mean = np.mean(width_array_clean)
-    # median = np.median(width_array_clean)
-    # sample_stdev = np.std(width_array_clean, ddof=1)
-    # # Pack up the stats
-    # summary_stats = num_samples, len(width_array_clean), mean, median, sample_stdev 
+    # Calculate the mean, median, and standard deviation
+    width_array_clean = width_array[np.logical_not(np.isnan(width_array))]
+    mean = np.mean(width_array_clean)
+    median = np.median(width_array_clean)
+    sample_stdev = np.std(width_array_clean, ddof=1)
+    # Pack up the stats
+    summary_stats = num_samples, len(width_array_clean), mean, median, sample_stdev 
 
-    # # Save the data
-    # print("Writing header.")
-    # # Write a header file
-    # write_header(custom_name, file_name, smooth_method, smooth_params, \
-    # base_method, base_params, width_method, error_list, summary_stats, note)
+    # Save the data
+    print("Writing header.")
+    # Write a header file
+    write_header(custom_name, file_name, smooth_method, smooth_params, \
+    base_method, base_params, width_method, error_list, summary_stats, note)
     
 
-    # # Write a data file
-    # print("Writing measurement data file.")
-    # write_measurement_data(custom_name, file_name, width_array)
-    # print("Finished.")
+    # Write a data file
+    print("Writing measurement data file.")
+    write_measurement_data(custom_name, file_name, width_array)
+    print("Finished.")
 
 if __name__ == "__main__":
     TEM_length_main()
