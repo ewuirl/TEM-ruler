@@ -7,3 +7,4 @@ width_method = default
 base_method = default
 d2_threshold = default
 midpoint_window = default
+split_frac = default

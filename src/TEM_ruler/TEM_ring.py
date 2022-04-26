@@ -14,10 +14,11 @@ from TEM_ruler.TEM_length import find_base_d2
 from TEM_ruler.TEM_length import fit_plateau_baseline
 from TEM_ruler.TEM_length import fit_baseline
 from TEM_ruler.TEM_length import calculate_half_max_full_width_pos
+from TEM_ruler.TEM_length import check_found_edges
 
 
 # Figure out midpoint of ring
-def find_ring_center(y_smooth, window):
+def find_ring_bounds(y_smooth, window, split_frac=0.2):
     mid_point = int(len(y_smooth)/2)
     left_bound = mid_point-int(window/2)
     right_bound = mid_point+int(window/2)
@@ -27,8 +28,12 @@ def find_ring_center(y_smooth, window):
         right_bound = find_local_value(target_value, y_smooth, right_bound, -1, max_steps=20)
     else:
         left_bound = find_local_value(target_value, y_smooth, left_bound, 1, max_steps=20)
+
+    left_split = int(mid_point*split_frac)
+    right_split = int((len(y_smooth)-mid_point)*(1-split_frac)+mid_point)
     
-    return (left_bound, right_bound, int((right_bound-left_bound)/2)+left_bound)
+    return (left_bound, right_bound, int((right_bound-left_bound)/2)+left_bound, \
+        left_split, right_split)
 
 # Width calculation methods
 def calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr):
@@ -45,16 +50,24 @@ def calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr):
     widths_array[1] = right_half_max_positions[1] - right_half_max_positions[0]
     widths_array[2] = right_half_max_positions[0] - left_half_max_positions[1]
 
-    return widths_array
+    width_string = check_found_edges(widths_array)
+    if "0" in width_string:
+        widths_array[np.less(widths_array,0)] = np.nan
+        error_string = f"Negative_Width_Error: {width_string}"
+    else:
+        error_string = "" 
+
+    return widths_array, error_string
 
 def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index, midpoint_window):
+    base_func, base_params, adjust_index, midpoint_window, split_frac):
     
     # Find the midpoint of the ring
-    left_bound, right_bound, midpoint = find_ring_center(y_smooth, midpoint_window)
+    left_bound, right_bound, midpoint, left_split, right_split = \
+    find_ring_bounds(y_smooth, midpoint_window, split_frac=split_frac)
 
     # print(f"center point stuff")
-    # print(left_bound, right_bound, midpoint)
+    # print(left_bound, right_bound, midpoint, left_split, right_split)
 
     # Calculate the first derivative
     x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
@@ -62,10 +75,14 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     y_smooth_d1_s = smooth_func(y_smooth_d1, *smooth_params)
 
     # Find the peaks (hill and valley) of the first derivative
-    left_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:midpoint+1]))[0][0]
-    left_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:midpoint+1]))[0][0]
-    right_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint:-5]))[0][0]
-    right_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint:-5]))[0][0]
+    left_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[left_split:midpoint-4]))[0][0]
+    left_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[left_split:midpoint-4]))[0][0]
+    right_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint+5:right_split]))[0][0]
+    right_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint+5:right_split]))[0][0]
+    # left_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:midpoint+1]))[0][0]
+    # left_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:midpoint+1]))[0][0]
+    # right_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint:-5]))[0][0]
+    # right_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint:-5]))[0][0]
     # print("peaks")
     # print(f"left: {left_rising_peak_loc_smooth}, {left_falling_peak_loc_smooth}")
     # print(f"right: {right_rising_peak_loc_smooth}, {right_falling_peak_loc_smooth}")
@@ -98,7 +115,13 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
         # print(f"adjusted bases: {base_loc_arr}")
 
         # Calculate the half max full width ring and pore widths
-        widths_array = calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr)
+        widths_array, width_error_string = calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr)
+        # print(f"widths: {widths_array}")
+
+        if len(error_string) > 0:
+            error_string += f"\f{width_error_string}"
+        else:
+            error_string = width_error_string
 
     return widths_array, error_string
 
@@ -151,12 +174,13 @@ def fit_ring_baseline(x_data, y_smooth, base_end_arr):
     return y_smooth_blc, baseline_correction
 
 def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index, midpoint_window):
+    base_func, base_params, adjust_index, midpoint_window, split_frac):
     # Find the midpoint of the ring
-    left_bound, right_bound, midpoint = find_ring_center(y_smooth, midpoint_window)
+    left_bound, right_bound, midpoint, left_split, right_split = \
+    find_ring_bounds(y_smooth, midpoint_window, split_frac=split_frac)
 
     # print(f"center point stuff")
-    # print(left_bound, right_bound, midpoint)
+    # print(left_bound, right_bound, midpoint, left_split, right_split)
 
     # Calculate the first derivative
     x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
@@ -164,13 +188,17 @@ def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_par
     y_smooth_d1_s = smooth_func(y_smooth_d1, *smooth_params)
 
     # Find the peaks (hill and valley) of the first derivative
-    left_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:midpoint+1]))[0][0]
-    left_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:midpoint+1]))[0][0]
-    right_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint:-5]))[0][0]
-    right_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint:-5]))[0][0]
+    # left_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:midpoint+1]))[0][0]
+    # left_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:midpoint+1]))[0][0]
+    # right_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint:-5]))[0][0]
+    # right_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint:-5]))[0][0]
+    left_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[left_split:midpoint-4]))[0][0]
+    left_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[left_split:midpoint-4]))[0][0]
+    right_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint+5:right_split]))[0][0]
+    right_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint+5:right_split]))[0][0]
     # print("peaks")
-    # print(f"left: {left_rising_peak_loc_smooth}, {left_falling_peak_loc_smooth}")
-    # print(f"right: {right_rising_peak_loc_smooth}, {right_falling_peak_loc_smooth}")
+    # print(f"left: {left_rising_peak_loc}, {left_falling_peak_loc}")
+    # print(f"right: {right_rising_peak_loc}, {right_falling_peak_loc}")
     
     # Store peaks in peak list
     base_peak_list = [left_rising_peak_loc, left_falling_peak_loc, \
@@ -204,7 +232,7 @@ def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_par
         # Calculate the half max full width
         widths_array, error_string = calculate_ring_min_max(x_data, y_smooth_blc, \
             smooth_func, smooth_params, base_func, base_params, adjust_index, \
-            midpoint_window)
+            midpoint_window, split_frac)
 
     return widths_array, error_string
 
@@ -226,6 +254,7 @@ def read_TEM_ring_settings(settings_path):
     # the TEM profile
     adjust_index = 1 
     midpoint_window = 10
+    split_frac = 0.2
 
     # Handle custom settings
     if settings_path == "default":
@@ -255,6 +284,8 @@ def read_TEM_ring_settings(settings_path):
                         d2_threshold = float(line_list[1])
                     elif line_list[0] == "midpoint_window" and line_list[1] != "default":
                         midpoint_window = int(line_list[1])
+                    elif line_list[0] == "split_frac" and line_list[1] != "default":
+                        midpoint_window = float(line_list[1])
                     else:
                         pass
                 # Adjust baseline settings
@@ -274,7 +305,7 @@ def read_TEM_ring_settings(settings_path):
                 # Stop the script execution
                 sys.exit(1)
     return (smooth_method, smooth_func, smooth_params, width_method, base_method, \
-        base_func, base_params, adjust_index, midpoint_window)
+        base_func, base_params, adjust_index, midpoint_window, split_frac)
 
 # Writing Output Files
 def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
@@ -383,7 +414,7 @@ def TEM_ring_main():
     else:
         settings_path = "default"
     smooth_method, smooth_func, smooth_params, width_method, base_method, \
-    base_func, base_params, adjust_index, midpoint_window = \
+    base_func, base_params, adjust_index, midpoint_window, split_frac = \
     read_TEM_ring_settings(settings_path)
 
     # Determine if data is transposed
@@ -421,6 +452,7 @@ def TEM_ring_main():
 
     # Serial measurements
     print("Making measurements.")
+    # for i in range(1):
     for i in range(num_samples):
         if progress:
             print(i)
@@ -428,6 +460,7 @@ def TEM_ring_main():
             pass
         # Pick the x columns
         x_index = 2*i
+        # x_index = 2*10
         
         # Remove the NaN values
         x_data, y_data = exclude_NaN(x_index, length_df)
@@ -444,18 +477,18 @@ def TEM_ring_main():
             # Calculate the widths (baseline correction)
             width_array, error_string = calculate_ring_baseline_correction(x_data, \
                 y_smooth, smooth_func, smooth_params, base_func, base_params, \
-                adjust_index, midpoint_window)
+                adjust_index, midpoint_window, split_frac)
             width_array_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
                 y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
-                adjust_index, midpoint_window)
+                adjust_index, midpoint_window, split_frac)
         else:
             # Calculate the widths (no baseline correction)
             width_array, error_string = calculate_ring_min_max(x_data, y_smooth, \
                 smooth_func, smooth_params, base_func, base_params, adjust_index, \
-                midpoint_window)
+                midpoint_window, split_frac)
             width_array_1, error_string_1 = calculate_ring_min_max(x_data_1, \
                 y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
-                adjust_index, midpoint_window)
+                adjust_index, midpoint_window, split_frac)
         
         # Record the data
         ring_width_array[i,:2] = width_array[:2]
@@ -502,7 +535,7 @@ def TEM_ring_main():
             pass
         if len(error_string_1)>0:
             error_message = f"Sample: {i}, Measurement: 2, {error_string_1}"
-            error_list.append(error_string_1)
+            error_list.append(error_message)
             print(error_message)
         else:
             pass

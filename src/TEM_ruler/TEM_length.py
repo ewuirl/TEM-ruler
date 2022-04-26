@@ -73,7 +73,7 @@ def check_found_edges(base_loc_arr):
             check_string += "1"
     return check_string
 
-def find_zero_crossing(derivative, mu, step_size, direction, \
+def find_zero_crossing(derivative, mu, direction, step_size, \
     threshold=2, max_steps=20):
     """
     find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_steps=20)
@@ -142,7 +142,7 @@ def find_base_zero(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list,
     # Rising peak
     for i in range(len(base_loc_arr)):
         base_loc_arr[i] = find_zero_crossing(y_smooth_d1, peak_list[i], \
-            step_size, directions_list[i], threshold=threshold, max_steps=max_steps)
+            directions_list[i], step_size, threshold=threshold, max_steps=max_steps)
     
     # Check if bases were found
     base_string = check_found_edges(base_loc_arr)
@@ -158,6 +158,31 @@ def find_base_zero(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list,
 
 # # Second Derivative Threshold Method
 # # #
+# def find_local_supremum(data, start_point, direction, max_steps=20):
+#     supremum = -1
+#     num_steps = 0
+#     found_local_supremum = False
+#     check_point = start_point
+#     if data[check_point+direction]-data[start_point] > 0:
+#         sign = 1
+#     else:
+#         sign = -1
+#     while not found_local_supremum and num_steps < max_steps:
+#         test_step = check_point+direction
+#         # Check if the test step is in bounds
+#         if 0 <= test_step < len(data):
+#             if sign*(data[test_step]-data[check_point]) > 0:
+#                 check_point = test_step
+#             else:
+#                 supremum = check_point
+#                 found_local_supremum = True
+#             num_steps += 1
+#         else: 
+#             # If the test step is out of bounds, set the crossing point to the test step
+#             found_local_supremum = True
+#             supremum = check_point
+#     return supremum
+
 def find_local_supremum(data, start_point, direction, max_steps=20):
     supremum = -1
     num_steps = 0
@@ -174,13 +199,24 @@ def find_local_supremum(data, start_point, direction, max_steps=20):
             if sign*(data[test_step]-data[check_point]) > 0:
                 check_point = test_step
             else:
-                supremum = check_point
-                found_local_supremum = True
+                next_test_step = test_step+direction
+                # Check if next test step is in bounds
+                if 0 <= next_test_step < len(data):            
+                    if sign*(data[next_test_step]-data[test_step]) > 0:
+                        check_point = next_test_step
+                        num_steps+=1
+                    else:
+                        supremum = check_point
+                        found_local_supremum = True
+                # If the next test step is out of bounds, set the crossing point to the test step
+                else:
+                    supremum = check_point
+                    found_local_supremum = True
             num_steps += 1
         else: 
             # If the test step is out of bounds, set the crossing point to the test step
-            found_local_supremum = True
             supremum = check_point
+            found_local_supremum = True
     return supremum
 
 def find_local_value(target_value, data, start_point, direction, max_steps=20):
@@ -198,7 +234,8 @@ def find_local_value(target_value, data, start_point, direction, max_steps=20):
         test_step = check_point+direction
         # Check if the test step is in bounds
         if 0 <= test_step < len(data):
-            if sign*(data[test_step]) > target_value:
+            # if sign*(data[test_step]) > target_value:
+            if sign*(data[test_step]) > target_value and sign*(data[test_step]) < sign*(data[check_point]):
                 check_point = test_step
             else:
                 # Pick the point that's closest to the target value
@@ -245,7 +282,7 @@ def find_base_d2(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, \
         # first derivativezero calculation method
         if supremum_loc_arr[i] < 0:
             base_loc_arr[i] = find_zero_crossing(y_smooth_d1, peak_list[i], \
-                step_size, directions_list[i], threshold=threshold, \
+                directions_list[i], step_size, threshold=threshold, \
                 max_steps=max_steps)
         # If a local supremum was found, find the base locatin using the 2nd 
         # derivative threshold method
@@ -414,8 +451,14 @@ def calculate_half_max_full_width(x_data, y_smooth, base_loc_arr):
 
     # Calculate the half max full width
     width = half_max_positions[1] - half_max_positions[0]
+    
+    if width >= 0:
+        error_string = ""
+    else:
+        width = np.nan
+        error_string = "Negative_Width_Error"
 
-    return width
+    return width, error_string
 
 def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     base_func, base_params, adjust_index):
@@ -449,8 +492,12 @@ def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
                 pass
 
         # Calculate the half max full width
-        width = calculate_half_max_full_width(x_data, y_smooth, base_loc_arr)
+        width, width_error_string = calculate_half_max_full_width(x_data, y_smooth, base_loc_arr)
 
+        if len(error_string) > 0:
+            error_string += f"\t{width_error_string}"
+        else:
+            error_string = width_error_string
     return width, error_string
 
 def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params, \

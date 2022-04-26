@@ -7,3 +7,4 @@ width_method = min max
 base_method = 2nd derivative threshold
 d2_threshold = 0.5
 midpoint_window = 10
+split_frac = 0.2
