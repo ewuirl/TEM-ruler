@@ -245,8 +245,8 @@ def read_TEM_ring_settings(settings_path):
     width_method = "min_max"
     base_method = "2nd derivative threshold"
     base_func = find_base_d2
-    step_size = 2
-    threshold = 2
+    step_size = 1
+    threshold = 1
     max_steps = 20
     d2_threshold = 2
     base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)

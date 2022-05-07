@@ -73,6 +73,64 @@ def check_found_edges(base_loc_arr):
             check_string += "1"
     return check_string
 
+# def find_zero_crossing(derivative, mu, direction, step_size, \
+#     threshold=2, max_steps=20):
+#     """
+#     find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_steps=20)
+
+#     This argument takes the derivative of a function, a peak location, a 
+#     direction (-1,1), and looks for the point at which the derivative crosses zero in
+#     that direction from the peak.
+
+#     Arguments:
+
+#     Returns: 
+
+#     """
+#     # ADD ASSERT FOR DIRECTION
+#     # print(f"peak: {mu}")
+#     crossing_point = -1
+#     found_crossing_point = False
+#     step = int(step_size*direction)
+#     check_point = mu + step
+#     num_steps = 0
+#     if derivative[check_point] > 0:
+#         sign = 1
+#     else:
+#         sign = -1
+#     while not found_crossing_point and num_steps < max_steps:
+#         # print("checking step")
+#         # print(sign*derivative[check_point+step])
+#         test_step = check_point+step
+#         # Check if the test step is in bounds
+#         # print(f"check if test step in bounds: {test_step}")
+#         if 0 <= test_step < len(derivative):
+#             if sign*derivative[test_step] > 0:
+#                 # print(f"take step to {test_step}")
+#                 check_point = test_step
+#             else:
+#                 # print("found crossing point")
+#                 crossing_point = check_point
+#                 found_crossing_point = True
+#             num_steps += 1
+#         else: 
+#             # If the test step is out of bounds and the step size is greater than 1
+#             # Try using a smaller step size
+#             if abs(step) > 1:
+#                 # print(f"test step out of bounds, smaller steps")
+#                 step = direction
+#             # If the test step is out of bounds, set the crossing point to the test step
+#             else:
+#                 # print(f"test set out of bounds, set crossing point to check point")
+#                 found_crossing_point = True
+#                 crossing_point = check_point
+
+#     # print(f"found crossing point: {found_crossing_point}")
+#     # print(f"crossing point: {crossing_point}")
+#     # print(f"num steps: {num_steps}")
+#     # print(f"checkpoint after while loop: {check_point}")
+#     return crossing_point
+
 def find_zero_crossing(derivative, mu, direction, step_size, \
     threshold=2, max_steps=20):
     """
@@ -94,6 +152,7 @@ def find_zero_crossing(derivative, mu, direction, step_size, \
     step = int(step_size*direction)
     check_point = mu + step
     num_steps = 0
+    step_count = 1
     if derivative[check_point] > 0:
         sign = 1
     else:
@@ -105,19 +164,26 @@ def find_zero_crossing(derivative, mu, direction, step_size, \
         # Check if the test step is in bounds
         # print(f"check if test step in bounds: {test_step}")
         if 0 <= test_step < len(derivative):
-            if sign*derivative[test_step] > 0:
+            # if sign*derivative[test_step] > 0:
+            if sign*derivative[test_step] > threshold:
                 # print(f"take step to {test_step}")
                 check_point = test_step
+                num_steps += step_count
             else:
-                # print("found crossing point")
-                crossing_point = check_point
-                found_crossing_point = True
-            num_steps += 1
+                if abs(step) > 1:
+                    step = direction
+                    step_count = 0.5
+                else:
+                    # print("found crossing point")
+                    crossing_point = check_point
+                    found_crossing_point = True
         else: 
+            # print("here!")
             # If the test step is out of bounds and the step size is greater than 1
             # Try using a smaller step size
             if abs(step) > 1:
                 # print(f"test step out of bounds, smaller steps")
+                # print("changing step size")
                 step = direction
             # If the test step is out of bounds, set the crossing point to the test step
             else:
@@ -143,6 +209,8 @@ def find_base_zero(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list,
     for i in range(len(base_loc_arr)):
         base_loc_arr[i] = find_zero_crossing(y_smooth_d1, peak_list[i], \
             directions_list[i], step_size, threshold=threshold, max_steps=max_steps)
+        # base_loc_arr[i] = find_zero_crossing(y_smooth_d1_s, peak_list[i], \
+        #     directions_list[i], step_size, threshold=threshold, max_steps=max_steps)
     
     # Check if bases were found
     base_string = check_found_edges(base_loc_arr)
@@ -555,7 +623,7 @@ def read_TEM_length_settings(settings_path):
     base_method = "2nd derivative threshold"
     base_func = find_base_d2
     step_size = 2
-    threshold = 2
+    threshold = 1
     max_steps = 20
     d2_threshold = 0.5
     base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
@@ -607,6 +675,7 @@ def read_TEM_length_settings(settings_path):
                 print(msg)
                 # Stop the script execution
                 sys.exit(1)
+    print(threshold)
     return (smooth_method, smooth_func, smooth_params, width_method, base_method, \
         base_func, base_params, adjust_index)
 
