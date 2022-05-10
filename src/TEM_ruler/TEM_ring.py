@@ -128,6 +128,9 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
 
 # Baseline Fitting Functions
 def fit_ring_baseline(x_data, y_smooth, base_end_arr):
+    # Create an array to store the baseline correction
+    baseline_correction = np.zeros(len(x_data))
+
     # Fit the baseline to straighten the plateaus of the ring
     left_plateau_baseline_fit, left_bl_slope, left_bl_intercept = fit_plateau_baseline(x_data, y_smooth, base_end_arr[:2])
     left_x_plateau = x_data[base_end_arr[0]:base_end_arr[1]+1]
@@ -139,28 +142,34 @@ def fit_ring_baseline(x_data, y_smooth, base_end_arr):
 
     # Prepare the outer edge data (center them so the base endpoints are at 0,0)
     # Left side
-    x_left_centered = x_data[:base_end_arr[0]+1] - x_data[base_end_arr[0]]
-    x_left_centered = x_left_centered.values
-    y_smooth_left_centered  = y_smooth[:base_end_arr[0]+1]-y_smooth[base_end_arr[0]]        
+    if base_end_arr[0] > 0:
+        # Center the data on the base point
+        x_left_centered = x_data[:base_end_arr[0]+1] - x_data[base_end_arr[0]]
+        x_left_centered = x_left_centered.values
+        y_smooth_left_centered  = y_smooth[:base_end_arr[0]+1]-y_smooth[base_end_arr[0]]
+        # Fit left base
+        lm_left = LinearRegression(fit_intercept = False)
+        lm_left.fit(x_left_centered.reshape(-1,1), y_smooth_left_centered)     
+        # Add left part of the baseline correction
+        baseline_correction[:base_end_arr[0]] = lm_left.predict(x_left_centered[:-1].reshape(-1,1)) +  y_smooth[base_end_arr[0]]
+    else:
+        pass
     # Right side
-    x_right_centered = x_data[base_end_arr[3]:] - x_data[base_end_arr[3]]
-    x_right_centered = x_right_centered.values
-    y_smooth_right_centered = y_smooth[base_end_arr[3]:]-y_smooth[base_end_arr[3]]        
-    
-    # Fit left base
-    lm_left = LinearRegression(fit_intercept = False)
-    lm_left.fit(x_left_centered.reshape(-1,1), y_smooth_left_centered)
-    # Fit the right base
-    lm_right = LinearRegression(fit_intercept = False)
-    lm_right.fit(x_right_centered.reshape(-1,1), y_smooth_right_centered)
+    if base_end_arr[3] < len(x_data)-1:
+        # Center the data on the base point
+        x_right_centered = x_data[base_end_arr[3]:] - x_data[base_end_arr[3]]
+        x_right_centered = x_right_centered.values
+        y_smooth_right_centered = y_smooth[base_end_arr[3]:]-y_smooth[base_end_arr[3]]        
+        # Fit the right base
+        lm_right = LinearRegression(fit_intercept = False)
+        lm_right.fit(x_right_centered.reshape(-1,1), y_smooth_right_centered)
+        # Add right part of the baseline correction
+        baseline_correction[base_end_arr[3]+1:] = lm_right.predict(x_right_centered[1:].reshape(-1,1)) +  y_smooth[base_end_arr[3]]
 
-    # Assemble the baseline correction
-    baseline_correction = np.zeros(len(x_data))
-    baseline_correction[:base_end_arr[0]] = lm_left.predict(x_left_centered[:-1].reshape(-1,1)) +  y_smooth[base_end_arr[0]]
+    # Assemble the plateaus of the baseline correction
     baseline_correction[base_end_arr[0]:base_end_arr[1]+1] = left_plateau_baseline
     baseline_correction[base_end_arr[2]:base_end_arr[3]+1] = right_plateau_baseline
-    baseline_correction[base_end_arr[3]+1:] = lm_right.predict(x_right_centered[1:].reshape(-1,1)) +  y_smooth[base_end_arr[3]]
-
+    
     # Handle the middle
     if base_end_arr[1] != base_end_arr[2]:
         mid_baseline_fit, mid_bl_slope, mid_bl_intercept = fit_plateau_baseline(x_data, y_smooth, base_end_arr[1:3])
