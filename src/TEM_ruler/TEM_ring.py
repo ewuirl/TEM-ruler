@@ -15,6 +15,7 @@ from TEM_ruler.TEM_length import fit_plateau_baseline
 from TEM_ruler.TEM_length import fit_baseline
 from TEM_ruler.TEM_length import calculate_half_max_full_width_pos
 from TEM_ruler.TEM_length import check_found_edges
+from TEM_ruler.TEM_length import determine_os
 
 
 # Figure out midpoint of ring
@@ -243,13 +244,13 @@ def read_TEM_ring_settings(settings_path):
     smooth_func = signal.savgol_filter
     smooth_params = (9, 3)
     width_method = "min_max"
-    base_method = "2nd derivative threshold"
-    base_func = find_base_d2
+    base_method = "1st derivative zero threshold"
+    base_func = find_base_zero
     step_size = 1
     threshold = 1
     max_steps = 20
     d2_threshold = 2
-    base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
+    base_params = (step_size, threshold, max_steps)
     # x position of 2nd derivative is shifted by 1 from the x position of 
     # the TEM profile
     adjust_index = 1 
@@ -289,7 +290,7 @@ def read_TEM_ring_settings(settings_path):
                     else:
                         pass
                 # Adjust baseline settings
-                if base_method == "1st derivative zero crossing": 
+                if base_method == "1st derivative zero threshold": 
                     base_func = find_base_zero
                     base_params = (step_size, threshold, max_steps)
                 elif base_method == "2nd derivative threshold":
@@ -299,7 +300,7 @@ def read_TEM_ring_settings(settings_path):
                 else:
                     raise ValueError("ValueError: Suppled base finding method " \
                         + "not recognized. Please use '1st derivative zero " \
-                        + "crossing' or '2nd derivative threshold'.")
+                        + "threshold' or '2nd derivative threshold'.")
             except (ValueError) as msg:
                 print(msg)
                 # Stop the script execution
@@ -309,14 +310,19 @@ def read_TEM_ring_settings(settings_path):
 
 # Writing Output Files
 def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
-    base_method, base_params, width_method, midpoint_window, error_list, \
-    summary_stats, note):
-    with open(f"{file_name}_header_{custom_name}.txt", 'w') as header_file:
+    base_method, base_params, use_baseline, width_method, midpoint_window, \
+    error_list, summary_stats, note):
+    if len(custom_name) > 0:
+        add_name = f"_{custom_name}"
+    else:
+        add_name = ""
+    with open(f"{file_name}_header{add_name}.txt", 'w') as header_file:
         # Record the calculation methods and settings
         header_file.write("######## Calculation settings ########\n")
         header_file.write(f"Center finding window size: {midpoint_window}\n")
         header_file.write(f"Smoothing method: {smooth_method}\n")
         header_file.write(f"Smoothing parameters: {smooth_params}\n")
+        header_file.write(f"Baseline correction: {use_baseline}\n")
         header_file.write(f"Base finding method: {base_method}\n")
         if base_method == "2nd derivative threshold":
             d2_threshold, step_size, threshold, max_steps, smooth_func, \
@@ -361,7 +367,11 @@ def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
 
 def write_ring_measurement_data(custom_name, file_name, ring_width_array, ring_mean_arr, \
     ring_stdev_arr, pore_width_array, pore_mean_arr, pore_stdev_arr):
-    with open(f"{file_name}_measurements_{custom_name}.txt", 'w') as data_file:
+    if len(custom_name) > 0:
+        add_name = f"_custom_name"
+    else:
+        add_name = ""
+    with open(f"{file_name}_measurements{add_name}.txt", 'w') as data_file:
         for i in range(4):
             data_file.write(f"Ring Width {i+1}\t")
         data_file.write(f"Ring Mean\tRing Sample Std Dev\t")
@@ -378,15 +388,17 @@ def write_ring_measurement_data(custom_name, file_name, ring_width_array, ring_m
 
 def TEM_ring_main():
     # Argument parser
-    parser = argparse.ArgumentParser(description="Takes in an excel file of TEM \
-        ring grayscale profiles and computes the widths of the rings and the pores \
-        using a half max full width approach.")
+    parser = argparse.ArgumentParser(description="akes in an excel or txt file of TEM \
+        grayscale profiles and computes the lengths of the objects using a half \
+        max full width approach. Results are saved in the same folder as the input file.")
     parser.add_argument("read_file_path", type=str, \
         help="The path to the excel file to analyze.")
-    parser.add_argument("save_name", type=str, \
-        help="The name extension to add to save file names that results are saved to.")
+    parser.add_argument("--save_name", type=str, \
+        help="A custom name to add to save file names that results are saved to.")
+    parser.add_argument("--save_folder", type=str, \
+        help="Path to the folder to save results to.")
     parser.add_argument("--baseline", type=str, 
-        help="If True, applies a baseline correction before trying to determine the length. Defaults to False.")
+        help="If True, applies a baseline correction before trying to determine the length. Defaults to True.")
     parser.add_argument("--settings", type=str, \
         help="The path to the file containing analysis settings.")
     parser.add_argument("--transpose", type=str, \
@@ -399,14 +411,31 @@ def TEM_ring_main():
 
     # Parse the arguments
     read_file_path = args.read_file_path
-    file_name = read_file_path.split("/")[-1].split(".")[0]
-    custom_name = args.save_name
+    file_name = read_file_path.split(".")[0]
 
-    true_list = ["True", "true"]
-    if args.baseline and args.baseline in true_list:
-        use_baseline = True
+    # Get custom save name
+    if args.save_name:
+        custom_name = args.save_name
     else:
+        custom_name = ""
+
+    # Get custom save folder
+    if args.save_folder:
+        print("Save folder provided")
+        file_split_string = determine_os()
+        save_folder = args.save_folder
+        file_name = read_file_path.split(file_split_string)[-1].split(".")[0]
+        file_name = f"{save_folder}{file_split_string}{file_name}"
+
+    else:
+        file_name = read_file_path.split(".")[0]
+
+    # Get baseline setting
+    true_list = ["True", "true", "TRUE"]
+    if args.baseline and args.baseline not in true_list:
         use_baseline = False
+    else:
+        use_baseline = True
 
     # Get settings
     if args.settings:
@@ -571,8 +600,8 @@ def TEM_ring_main():
     # Write a header file
     print("Writing header.")
     write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
-        base_method, base_params, width_method, midpoint_window, error_list, \
-        summary_stats, note)
+        base_method, base_params, use_baseline, width_method, midpoint_window, \
+        error_list, summary_stats, note)
     # Write a data file
     print("Writing measurement data file.")
     write_ring_measurement_data(custom_name, file_name, ring_width_array, \
@@ -594,7 +623,7 @@ if __name__ == "__main__":
     # max_steps = 20
     # Base finding method
     # Zero crossing method
-    # base_method = "1st derivative zero crossing"
+    # base_method = "1st derivative zero threshold"
     # adjust_index = 0
     # base_params = (step_size, threshold, max_steps)
     # base_func = find_base_zero

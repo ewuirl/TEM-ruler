@@ -4,4 +4,4 @@ step_size = 2
 threshold = default
 max_steps = 20
 width_method = min max
-base_method = 1st derivative zero crossing
+base_method = 1st derivative zero threshold
