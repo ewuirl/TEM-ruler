@@ -368,7 +368,7 @@ def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
 def write_ring_measurement_data(custom_name, file_name, ring_width_array, ring_mean_arr, \
     ring_stdev_arr, pore_width_array, pore_mean_arr, pore_stdev_arr):
     if len(custom_name) > 0:
-        add_name = f"_custom_name"
+        add_name = f"_{custom_name}"
     else:
         add_name = ""
     with open(f"{file_name}_measurements{add_name}.txt", 'w') as data_file:

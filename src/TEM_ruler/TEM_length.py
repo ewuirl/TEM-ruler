@@ -728,7 +728,7 @@ def write_header(custom_name, file_name, smooth_method, smooth_params, \
 
 def write_measurement_data(custom_name, file_name, width_array):
     if len(custom_name) > 0:
-        add_name = f"_custom_name"
+        add_name = f"_{custom_name}"
     else:
         add_name = ""
     with open(f"{file_name}_measurements{add_name}.txt", 'w') as data_file:
