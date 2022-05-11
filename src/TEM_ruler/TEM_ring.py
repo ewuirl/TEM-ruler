@@ -8,7 +8,7 @@ from TEM_ruler.TEM_length import read_TEM_data
 from TEM_ruler.TEM_length import exclude_NaN
 from TEM_ruler.TEM_length import central_diff
 from TEM_ruler.TEM_length import find_zero_crossing
-from TEM_ruler.TEM_length import find_base_zero
+from TEM_ruler.TEM_length import find_base_d1
 from TEM_ruler.TEM_length import find_local_value
 from TEM_ruler.TEM_length import find_base_d2
 from TEM_ruler.TEM_length import fit_plateau_baseline
@@ -253,7 +253,7 @@ def read_TEM_ring_settings(settings_path):
     smooth_func = signal.savgol_filter
     smooth_params = (9, 3)
     width_method = "min_max"
-    base_method = "1st derivative zero threshold"
+    base_method = "1st derivative threshold"
     base_func = find_base_zero
     step_size = 1
     threshold = 1
@@ -299,7 +299,7 @@ def read_TEM_ring_settings(settings_path):
                     else:
                         pass
                 # Adjust baseline settings
-                if base_method == "1st derivative zero threshold": 
+                if base_method == "1st derivative threshold": 
                     base_func = find_base_zero
                     base_params = (step_size, threshold, max_steps)
                 elif base_method == "2nd derivative threshold":
@@ -632,7 +632,7 @@ if __name__ == "__main__":
     # max_steps = 20
     # Base finding method
     # Zero crossing method
-    # base_method = "1st derivative zero threshold"
+    # base_method = "1st derivative threshold"
     # adjust_index = 0
     # base_params = (step_size, threshold, max_steps)
     # base_func = find_base_zero

@@ -81,64 +81,6 @@ def check_found_edges(base_loc_arr):
             check_string += "1"
     return check_string
 
-# def find_zero_crossing(derivative, mu, direction, step_size, \
-#     threshold=2, max_steps=20):
-#     """
-#     find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_steps=20)
-
-#     This argument takes the derivative of a function, a peak location, a 
-#     direction (-1,1), and looks for the point at which the derivative crosses zero in
-#     that direction from the peak.
-
-#     Arguments:
-
-#     Returns: 
-
-#     """
-#     # ADD ASSERT FOR DIRECTION
-#     # print(f"peak: {mu}")
-#     crossing_point = -1
-#     found_crossing_point = False
-#     step = int(step_size*direction)
-#     check_point = mu + step
-#     num_steps = 0
-#     if derivative[check_point] > 0:
-#         sign = 1
-#     else:
-#         sign = -1
-#     while not found_crossing_point and num_steps < max_steps:
-#         # print("checking step")
-#         # print(sign*derivative[check_point+step])
-#         test_step = check_point+step
-#         # Check if the test step is in bounds
-#         # print(f"check if test step in bounds: {test_step}")
-#         if 0 <= test_step < len(derivative):
-#             if sign*derivative[test_step] > 0:
-#                 # print(f"take step to {test_step}")
-#                 check_point = test_step
-#             else:
-#                 # print("found crossing point")
-#                 crossing_point = check_point
-#                 found_crossing_point = True
-#             num_steps += 1
-#         else: 
-#             # If the test step is out of bounds and the step size is greater than 1
-#             # Try using a smaller step size
-#             if abs(step) > 1:
-#                 # print(f"test step out of bounds, smaller steps")
-#                 step = direction
-#             # If the test step is out of bounds, set the crossing point to the test step
-#             else:
-#                 # print(f"test set out of bounds, set crossing point to check point")
-#                 found_crossing_point = True
-#                 crossing_point = check_point
-
-#     # print(f"found crossing point: {found_crossing_point}")
-#     # print(f"crossing point: {crossing_point}")
-#     # print(f"num steps: {num_steps}")
-#     # print(f"checkpoint after while loop: {check_point}")
-#     return crossing_point
-
 def find_zero_crossing(derivative, mu, direction, step_size, \
     threshold=2, max_steps=20):
     """
@@ -183,7 +125,11 @@ def find_zero_crossing(derivative, mu, direction, step_size, \
                     step_count = 0.5
                 else:
                     # print("found crossing point")
-                    crossing_point = check_point
+                    # Pick the point closest to the threshold
+                    if abs(sign*derivative[test_step]-1) > abs(sign*derivative[check_point]-1):
+                        crossing_point = check_point
+                    else:
+                        crossing_point = test_step
                     found_crossing_point = True
         else: 
             # print("here!")
@@ -205,7 +151,7 @@ def find_zero_crossing(derivative, mu, direction, step_size, \
     # print(f"checkpoint after while loop: {check_point}")
     return crossing_point
 
-def find_base_zero(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params): # Check this
+def find_base_d1(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params): # Check this
     # Unpack the parameters
     step_size, threshold, max_steps = base_params
 
@@ -628,8 +574,8 @@ def read_TEM_length_settings(settings_path):
     smooth_func = signal.savgol_filter
     smooth_params = (21, 3)
     width_method = "min_max"
-    base_method = "1st derivative zero threshold"
-    base_func = find_base_zero
+    base_method = "1st derivative threshold"
+    base_func = find_base_d1
     step_size = 2
     threshold = 1
     max_steps = 20
@@ -668,8 +614,8 @@ def read_TEM_length_settings(settings_path):
                     else:
                         pass
                 # Adjust baseline settings
-                if base_method == "1st derivative zero threshold": 
-                    base_func = find_base_zero
+                if base_method == "1st derivative threshold": 
+                    base_func = find_base_d1
                     base_params = (step_size, threshold, max_steps)
                 elif base_method == "2nd derivative threshold":
                     base_func = find_base_d2
