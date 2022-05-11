@@ -256,7 +256,7 @@ def read_TEM_ring_settings(settings_path):
     base_method = "1st derivative threshold"
     base_func = find_base_zero
     step_size = 1
-    threshold = 1
+    threshold = 2
     max_steps = 20
     d2_threshold = 2
     base_params = (step_size, threshold, max_steps)
