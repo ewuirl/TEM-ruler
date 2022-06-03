@@ -1,5 +1,5 @@
 smooth_method = savgol
-smooth_params = (21, 3)
+smooth_params = (9, 3)
 step_size = 2
 threshold = default
 max_steps = 20

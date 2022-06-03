@@ -5,4 +5,4 @@ threshold = default
 max_steps = 20
 width_method = min max
 base_method = 2nd derivative threshold
-d2_threshold = 0.5
+d2_threshold = default

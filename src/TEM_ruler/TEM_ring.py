@@ -37,56 +37,54 @@ def find_ring_bounds(y_smooth, window, split_frac=0.2):
         left_split, right_split)
 
 # Width calculation methods
-def calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr):
+def calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr, verbose=False):
     widths_array = np.zeros(3)
 
-    left_half_max_positions = \
+    left_half_max_positions, left_half_max_vals = \
     calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr[:4])
 
-    right_half_max_positions = \
+    right_half_max_positions, right_half_max_vals = \
     calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr[4:])
 
     # Calculate the half max full width
     widths_array[0] = left_half_max_positions[1] - left_half_max_positions[0]
     widths_array[1] = right_half_max_positions[1] - right_half_max_positions[0]
     widths_array[2] = right_half_max_positions[0] - left_half_max_positions[1]
-
+    # Handle errors
     width_string = check_found_edges(widths_array)
     if "0" in width_string:
         widths_array[np.less(widths_array,0)] = np.nan
         error_string = f"Negative_Width_Error: {width_string}"
     else:
         error_string = "" 
-
-    return widths_array, error_string
+    half_max_dict = {"width_error_string": error_string}
+    # Handle verbose argument
+    if verbose:
+        half_max_dict["half_max_positions"] = np.zeros(int(len(base_loc_arr)/2))
+        half_max_dict["half_max_vals"] = np.zeros(int(len(base_loc_arr)/2))        
+        half_max_dict["half_max_positions"][:2] = left_half_max_positions
+        half_max_dict["half_max_positions"][2:] = right_half_max_positions    
+        half_max_dict["half_max_vals"][:2] = left_half_max_vals
+        half_max_dict["half_max_vals"][2:] = right_half_max_vals  
+    else:
+        pass
+    return (widths_array, half_max_dict)
 
 def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index, midpoint_window, split_frac):
-    
+    base_func, base_params, adjust_index, midpoint_window, split_frac, verbose=False):
     # Find the midpoint of the ring
     left_bound, right_bound, midpoint, left_split, right_split = \
     find_ring_bounds(y_smooth, midpoint_window, split_frac=split_frac)
-
-    # print(f"center point stuff")
-    # print(left_bound, right_bound, midpoint, left_split, right_split)
 
     # Calculate the first derivative
     x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
     # Smooth the first derivative
     y_smooth_d1_s = smooth_func(y_smooth_d1, *smooth_params)
-
     # Find the peaks (hill and valley) of the first derivative
     left_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[left_split:midpoint-4]))[0][0]
     left_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[left_split:midpoint-4]))[0][0]
     right_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint+5:right_split]))[0][0]
     right_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint+5:right_split]))[0][0]
-    # left_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:midpoint+1]))[0][0]
-    # left_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:midpoint+1]))[0][0]
-    # right_rising_peak_loc_smooth = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint:-5]))[0][0]
-    # right_falling_peak_loc_smooth = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint:-5]))[0][0]
-    # print("peaks")
-    # print(f"left: {left_rising_peak_loc_smooth}, {left_falling_peak_loc_smooth}")
-    # print(f"right: {right_rising_peak_loc_smooth}, {right_falling_peak_loc_smooth}")
     
     # Store peaks in peak list
     peak_list = [left_rising_peak_loc_smooth, left_rising_peak_loc_smooth, \
@@ -97,34 +95,44 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     directions_list = [-1, 1, -1, 1, -1, 1, -1, 1]
 
     # Find base points of the peaks of the first derivative
-    base_loc_arr, error_string, base_string, suprema_string = base_func(x_d1, \
-        y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params)
+    base_loc_arr, base_dict = base_func(x_d1, y_smooth_d1, y_smooth_d1_s, \
+        peak_list, directions_list, base_params, verbose=verbose)
 
-    # print(f"bases: {base_loc_arr}")
-    # print(f"base string: {base_string}")
-    # print(f"suprema_string: {suprema_string}")
-
-    if "0" in base_string:
+    if "0" in base_dict["base_string"]:
         widths_array = np.array([np.nan, np.nan, np.nan])
     else:
         # Adjust the indices (for the 2nd derivative method)
-        for i in range(len(suprema_string)):
-            if suprema_string[i] == "1":
+        for i in range(len(base_dict["suprema_string"])):
+            if base_dict["suprema_string"][i] == "1":
                 base_loc_arr[i] = base_loc_arr[i] + adjust_index
             else:
                 pass
-        # print(f"adjusted bases: {base_loc_arr}")
 
         # Calculate the half max full width ring and pore widths
-        widths_array, width_error_string = calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr)
-        # print(f"widths: {widths_array}")
-
-        if len(error_string) > 0:
-            error_string += f"\f{width_error_string}"
+        widths_array, half_max_dict \
+        = calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr, verbose=verbose)
+        # Handle errors
+        if len(base_dict["error_string"]) > 0:
+            base_dict["error_string"] += f"\t{half_max_dict['width_error_string']}"
         else:
-            error_string = width_error_string
+            base_dict["error_string"] = half_max_dict["width_error_string"]
 
-    return widths_array, error_string
+    if verbose:
+        base_dict["left_bound"] = left_bound
+        base_dict["right_bound"] = right_bound
+        base_dict["midpoint"] = midpoint
+        base_dict["left_split"] = left_split
+        base_dict["right_split"] = right_split
+        base_dict["d1_data"] = (x_d1, y_smooth_d1, y_smooth_d1_s)
+        base_dict["d1_peak_list"] = [left_rising_peak_loc_smooth, \
+        left_falling_peak_loc_smooth, right_rising_peak_loc_smooth, \
+        right_falling_peak_loc_smooth]
+        base_dict["base_loc_arr"] = base_loc_arr
+        base_dict["half_max_positions"] = half_max_dict["half_max_positions"]
+        base_dict["half_max_vals"] = half_max_dict["half_max_vals"]
+    else:
+        pass
+    return (widths_array, base_dict)    
 
 # Baseline Fitting Functions
 def fit_ring_baseline(x_data, y_smooth, base_end_arr):
@@ -184,67 +192,69 @@ def fit_ring_baseline(x_data, y_smooth, base_end_arr):
     return y_smooth_blc, baseline_correction
 
 def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index, midpoint_window, split_frac):
+    base_func, base_params, adjust_index, midpoint_window, split_frac, verbose=False):
     # Find the midpoint of the ring
     left_bound, right_bound, midpoint, left_split, right_split = \
     find_ring_bounds(y_smooth, midpoint_window, split_frac=split_frac)
-
-    # print(f"center point stuff")
-    # print(left_bound, right_bound, midpoint, left_split, right_split)
-
     # Calculate the first derivative
     x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
     # Smooth the first derivative
     y_smooth_d1_s = smooth_func(y_smooth_d1, *smooth_params)
-
     # Find the peaks (hill and valley) of the first derivative
-    # left_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:midpoint+1]))[0][0]
-    # left_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:midpoint+1]))[0][0]
-    # right_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint:-5]))[0][0]
-    # right_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint:-5]))[0][0]
     left_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[left_split:midpoint-4]))[0][0]
     left_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[left_split:midpoint-4]))[0][0]
     right_rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[midpoint+5:right_split]))[0][0]
     right_falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[midpoint+5:right_split]))[0][0]
-    # print("peaks")
-    # print(f"left: {left_rising_peak_loc}, {left_falling_peak_loc}")
-    # print(f"right: {right_rising_peak_loc}, {right_falling_peak_loc}")
-    
     # Store peaks in peak list
     base_peak_list = [left_rising_peak_loc, left_falling_peak_loc, \
     right_rising_peak_loc, right_falling_peak_loc]
-
     base_directions_list = [-1, 1, -1, 1]
-
     # Find base points of the peaks of the first derivative
-    base_end_arr, error_string, base_string, suprema_string = base_func(x_d1, \
-        y_smooth_d1, y_smooth_d1_s, base_peak_list, base_directions_list, \
-        base_params)
-    # print(f"bases: {base_end_arr}")
-    # print(f"base string: {base_string}")
-    # print(f"suprema_string: {suprema_string}")
-
+    base_loc_arr_blc, base_dict_blc = base_func(x_d1, y_smooth_d1, \
+        y_smooth_d1_s, base_peak_list, base_directions_list, base_params, \
+        verbose=verbose)
+    
     # Adjust the indices (for the 2nd derivative method)
-    for i in range(len(suprema_string)):
-        if suprema_string[i] == "1":
-            base_end_arr[i] = base_end_arr[i] + adjust_index
+    for i in range(len(base_dict_blc["suprema_string"])):
+        if base_dict_blc["suprema_string"][i] == "1":
+            base_loc_arr_blc[i] = base_loc_arr_blc[i] + adjust_index
         else:
             pass
-
-    if "0" in base_string:
-        error_string = "Baseline correction failed: " + error_string
+    if "0" in base_dict_blc["base_string"]:
+        base_dict_blc["base_string"] = "Baseline correction failed: " + base_dict_blc["base_string"]
         widths_array = np.array([np.nan, np.nan, np.nan])
+        base_dict = base_dict_blc
     else:
         # Perform baseline correction 
         y_smooth_blc, baseline_correction = fit_ring_baseline(x_data, y_smooth, \
-            base_end_arr)
-
+            base_loc_arr_blc)
         # Calculate the half max full width
-        widths_array, error_string = calculate_ring_min_max(x_data, y_smooth_blc, \
+        widths_array, base_dict = calculate_ring_min_max(x_data, y_smooth_blc, \
             smooth_func, smooth_params, base_func, base_params, adjust_index, \
-            midpoint_window, split_frac)
+            midpoint_window, split_frac, verbose=verbose)
+        # Handle verbose
+        if verbose:
+            # Add the blc dict to the base_dict
+            for key, item in base_dict_blc.items():
+                base_dict[f"{key}_blc"] = item
+            base_dict["y_smooth_blc"] = y_smooth_blc
+            base_dict["baseline_correction"] = baseline_correction
+        else:
+            pass
 
-    return widths_array, error_string
+    if verbose:
+        base_dict["left_bound_blc"] = left_bound
+        base_dict["right_bound_blc"] = right_bound
+        base_dict["midpoint_blc"] = midpoint
+        base_dict["left_split_blc"] = left_split
+        base_dict["right_split_blc"] = right_split
+        base_dict["d1_peak_list_blc"] = base_peak_list
+        base_dict["base_loc_arr_blc"] = base_loc_arr_blc
+        base_dict["d1_data_blc"] = (x_d1, y_smooth_d1, y_smooth_d1_s)   
+    else:
+        pass
+    return (widths_array, base_dict)
+        
 
 # Reading settings
 def read_TEM_ring_settings(settings_path):
@@ -254,8 +264,8 @@ def read_TEM_ring_settings(settings_path):
     smooth_params = (9, 3)
     width_method = "min_max"
     base_method = "1st derivative threshold"
-    base_func = find_base_zero
-    step_size = 1
+    base_func = find_base_d1
+    step_size = 2
     threshold = 2
     max_steps = 20
     d2_threshold = 2
@@ -300,7 +310,7 @@ def read_TEM_ring_settings(settings_path):
                         pass
                 # Adjust baseline settings
                 if base_method == "1st derivative threshold": 
-                    base_func = find_base_zero
+                    base_func = find_base_d1
                     base_params = (step_size, threshold, max_steps)
                 elif base_method == "2nd derivative threshold":
                     base_func = find_base_d2
@@ -490,19 +500,19 @@ def TEM_ring_main():
 
     # Serial measurements
     print("Making measurements.")
-    # for i in range(1):
+
     for i in range(num_samples):
         if progress:
             print(i)
         else:
             pass
         # Pick the x columns
-        x_index = 2*i
-        # x_index = 2*10
+        x_index = 4*i
         
         # Remove the NaN values
         x_data, y_data = exclude_NaN(x_index, length_df)
         x_data_1, y_data_1 = exclude_NaN(x_index+2, length_df)
+        
 
         # print(f"Measurement 1 # data: {len(x_data)}")
         # print(f"Measurement 2 # data: {len(x_data_1)}")    
@@ -635,7 +645,7 @@ if __name__ == "__main__":
     # base_method = "1st derivative threshold"
     # adjust_index = 0
     # base_params = (step_size, threshold, max_steps)
-    # base_func = find_base_zero
+    # base_func = find_base_d1
     # custom_name = "serial_d1_zero"
     # 2nd derivative method
     # base_method = "2nd derivative threshold"

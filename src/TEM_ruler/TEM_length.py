@@ -151,30 +151,29 @@ def find_zero_crossing(derivative, mu, direction, step_size, \
     # print(f"checkpoint after while loop: {check_point}")
     return crossing_point
 
-def find_base_d1(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params): # Check this
+def find_base_d1(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params, \
+verbose=False): # Check this
     # Unpack the parameters
     step_size, threshold, max_steps = base_params
-
     # Create an array to store the base positions in
     base_loc_arr = np.zeros(len(peak_list),dtype=int)
-
     # Calculate the zero crossing points of the first derivative
     # Rising peak
     for i in range(len(base_loc_arr)):
         base_loc_arr[i] = find_zero_crossing(y_smooth_d1, peak_list[i], \
-            directions_list[i], step_size, threshold=threshold, max_steps=max_steps)
-        # base_loc_arr[i] = find_zero_crossing(y_smooth_d1_s, peak_list[i], \
-        #     directions_list[i], step_size, threshold=threshold, max_steps=max_steps)
-    
+            directions_list[i], step_size, threshold=threshold, max_steps=max_steps)    
     # Check if bases were found
     base_string = check_found_edges(base_loc_arr)
-
+    # Handle errors
     if "0" in base_string:
         error_string = f"Zero_Base_Finding_Error: {base_string}"
     else:
         error_string = ""
+    # Add strings to base_dict
+    base_dict = {"error_string": error_string, "base_string": base_string, \
+    "suprema_string": "0"*4}
 
-    return(base_loc_arr, error_string, base_string, "0"*len(base_loc_arr))
+    return(base_loc_arr, base_dict)
 
     
 
@@ -275,13 +274,13 @@ def find_local_value(target_value, data, start_point, direction, max_steps=20):
     return position
 
 def find_base_d2(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, \
-    base_params):
+    base_params, verbose=False):
     """
     """
     # Unpack the parameters
     target_value, step_size, threshold, max_steps, smooth_func, smooth_params = base_params
     # Create an array to store the local supremum in
-    supremum_loc_arr = np.zeros(len(peak_list),dtype=int)
+    suprema_loc_arr = np.zeros(len(peak_list),dtype=int)
     # Create an array to store the base positions in
     base_loc_arr = np.zeros(len(peak_list),dtype=int)
 
@@ -292,26 +291,24 @@ def find_base_d2(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, \
 
     # Find local supremum around the rising and falling peak locations of the
     # 1st derivative
-    for i in range(len(supremum_loc_arr)):
-        supremum_loc_arr[i] = find_local_supremum(y_smooth_d2_s, peak_list[i], \
+    for i in range(len(suprema_loc_arr)):
+        suprema_loc_arr[i] = find_local_supremum(y_smooth_d2_s, peak_list[i], \
                 directions_list[i], max_steps=max_steps)
 
     # Make sure local supremum was found  
-    suprema_string = check_found_edges(supremum_loc_arr)
-
-    for i in range(len(supremum_loc_arr)):
+    suprema_string = check_found_edges(suprema_loc_arr)
+    for i in range(len(suprema_loc_arr)):
         # If a local supremum was not found, find the base location using the 
-        # first derivativezero calculation method
-        if supremum_loc_arr[i] < 0:
+        # first derivative threshold calculation method
+        if suprema_loc_arr[i] < 0:
             base_loc_arr[i] = find_zero_crossing(y_smooth_d1, peak_list[i], \
                 directions_list[i], step_size, threshold=threshold, \
                 max_steps=max_steps)
         # If a local supremum was found, find the base locatin using the 2nd 
         # derivative threshold method
         else:
-
             base_loc_arr[i] = find_local_value(target_value, y_smooth_d2_s, \
-            supremum_loc_arr[i], directions_list[i], max_steps=max_steps)
+            suprema_loc_arr[i], directions_list[i], max_steps=max_steps)
 
     # Check if bases were found
     base_string = check_found_edges(base_loc_arr)
@@ -324,7 +321,15 @@ def find_base_d2(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, \
         error_string = f"D2_Base_Finding_Error: {base_string}"
     else:
         error_string = ""
-    return(base_loc_arr, error_string, base_string, suprema_string)
+    # Add additional information to dictionary
+    base_dict = {"error_string": error_string, "base_string": base_string, \
+    "suprema_loc_arr": suprema_loc_arr, "suprema_string": suprema_string}
+    
+    if verbose:                
+        base_dict["d2_data"] = (x_d2, y_smooth_d2, y_smooth_d2_s)
+    else:
+        pass
+    return(base_loc_arr, base_dict)
 
 
 # Baseline Correction 
@@ -432,58 +437,56 @@ def find_half_max_pos(half_max, half_max_bounds, x_data, y_data):
 
 # Width calculation methods
 def calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr):
-    # print(f"base loc arr: {base_loc_arr}")
     # Figure out the min and max values of the edges
     rising_peak_min = np.min(y_smooth[base_loc_arr[0]:base_loc_arr[1]+1]) 
     rising_peak_max = np.max(y_smooth[base_loc_arr[0]:base_loc_arr[1]+1])
     falling_peak_max = np.max(y_smooth[base_loc_arr[2]:base_loc_arr[3]+1])
-    falling_peak_min = np.min(y_smooth[base_loc_arr[2]:base_loc_arr[3]+1])
-    # print(f"rising_peak_min: {rising_peak_min}")
-    # print(f"rising_peak_max: {rising_peak_max}")
-    # print(f"falling_peak_max : {falling_peak_max}") 
-    # print(f"falling_peak_min: {falling_peak_min}")
+    falling_peak_min = np.min(y_smooth[base_loc_arr[2]:base_loc_arr[3]+1])    
     # Calculate the half max values
     rising_peak_half_max = calculate_half_max(rising_peak_max, \
         rising_peak_min)
     falling_peak_half_max = calculate_half_max(falling_peak_max, \
         falling_peak_min)
-    # print(f"rising_peak_half_max: {rising_peak_half_max}")
-    # print(f"falling_peak_half_max: {falling_peak_half_max}")
     # Find the half max neighbors
     rising_half_max_bounds = find_half_max_neighbors(rising_peak_half_max, \
         y_smooth, 1, base_loc_arr[0], base_loc_arr[1])
     falling_half_max_bounds = find_half_max_neighbors(falling_peak_half_max, \
         y_smooth, -1, base_loc_arr[2], base_loc_arr[3])
-    # print(f"rising_half_max_bounds: {rising_half_max_bounds}")
-    # print(f"falling_half_max_bounds: {falling_half_max_bounds}")
     # Find the half max positions
     rising_half_max_pos = find_half_max_pos(rising_peak_half_max, \
         rising_half_max_bounds, x_data, y_smooth)
     falling_half_max_pos = find_half_max_pos(falling_peak_half_max, \
         falling_half_max_bounds, x_data, y_smooth)
-    # print(f"rising_half_max_pos: {rising_half_max_pos}")
-    # print(f"falling_half_max_pos: {falling_half_max_pos}")
+    
 
-    # Calculate the half max full width positions
-    return np.array([rising_half_max_pos, falling_half_max_pos])
+    half_max_pos = np.array([rising_half_max_pos, falling_half_max_pos])
+    half_max_vals = np.array([rising_peak_half_max, falling_peak_half_max])
+    return (half_max_pos, half_max_vals)        
 
-def calculate_half_max_full_width(x_data, y_smooth, base_loc_arr):
-    half_max_positions = \
+
+def calculate_half_max_full_width(x_data, y_smooth, base_loc_arr, verbose=False):
+    half_max_pos, half_max_vals = \
     calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr)
 
     # Calculate the half max full width
-    width = half_max_positions[1] - half_max_positions[0]
+    width = half_max_pos[1] - half_max_pos[0]
     
     if width >= 0:
         error_string = ""
     else:
         width = np.nan
         error_string = "Negative_Width_Error"
+    half_max_dict = {"width_error_string": error_string}
+    if verbose:
+        half_max_dict["half_max_positions"] = half_max_pos
+        half_max_dict["half_max_vals"] = half_max_vals
+    else:
+        pass
 
-    return width, error_string
+    return width, half_max_dict
 
 def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index):
+    base_func, base_params, adjust_index, verbose=False):
     # Calculate the first derivative
     x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
     # Smooth the first derivative
@@ -492,38 +495,47 @@ def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     # Find the peaks (hill and valley) of the first derivative
     rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:-5]))[0][0]
     falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:-5]))[0][0]
-    # print(f"rising_peak_loc: {rising_peak_loc}")
-    # print(f"falling_peak_loc: {falling_peak_loc}")
     
     # Store peaks in peak list
     peak_list = [rising_peak_loc, rising_peak_loc, falling_peak_loc, falling_peak_loc]
     directions_list = [-1, 1, -1, 1]
 
     # Find base points of the peaks of the first derivative
-    base_loc_arr, error_string, base_string, suprema_string = base_func(x_d1, \
-        y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params)
+    base_loc_arr, base_dict = base_func(x_d1, \
+        y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params, \
+        verbose=verbose)
 
-    if "0" in base_string:
+    if "0" in base_dict["base_string"]:
         width = np.nan
     else:
         # Adjust the indices (for the 2nd derivative method)
-        for i in range(len(suprema_string)):
-            if suprema_string[i] == "1":
+        for i in range(len(base_dict["suprema_string"])):
+            if base_dict["suprema_string"][i] == "1":
                 base_loc_arr[i] = base_loc_arr[i] + adjust_index
             else:
                 pass
 
         # Calculate the half max full width
-        width, width_error_string = calculate_half_max_full_width(x_data, y_smooth, base_loc_arr)
-
-        if len(error_string) > 0:
-            error_string += f"\t{width_error_string}"
+        width, half_max_dict = calculate_half_max_full_width(x_data, y_smooth, \
+            base_loc_arr, verbose=verbose)
+        # Handle any width calculation errors
+        if len(base_dict["error_string"]) > 0:
+            base_dict["error_string"] += f"\t{half_max_dict['width_error_string']}"
         else:
-            error_string = width_error_string
-    return width, error_string
+            base_dict["error_string"] = half_max_dict["width_error_string"]
+    # Handle the verbose
+    if verbose:
+        base_dict["d1_data"] = (x_d1, y_smooth_d1, y_smooth_d1_s)
+        base_dict["d1_peak_list"] = [rising_peak_loc, falling_peak_loc]
+        base_dict["base_loc_arr"] = base_loc_arr
+        base_dict["half_max_positions"] = half_max_dict["half_max_positions"]
+        base_dict["half_max_vals"] = half_max_dict["half_max_vals"]
+    else:
+        pass
+    return width, base_dict
 
 def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index): 
+    base_func, base_params, adjust_index, verbose=False): 
     # Calculate the first derivative
     x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
     # Smooth the first derivative
@@ -532,40 +544,52 @@ def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params,
     # Find the peaks (hill and valley) of the first derivative
     rising_peak_loc = np.where(y_smooth_d1_s==np.max(y_smooth_d1_s[5:-5]))[0][0]
     falling_peak_loc = np.where(y_smooth_d1_s==np.min(y_smooth_d1_s[5:-5]))[0][0]
-    # print(f"rising_peak_loc: {rising_peak_loc}")
-    # print(f"falling_peak_loc: {falling_peak_loc}")
 
     # Store peaks in peak list
     base_peak_list = [rising_peak_loc, falling_peak_loc]
     base_directions_list = [-1, 1]
     # Find base points of the peaks of the first derivative
-    base_end_arr, error_string, base_string, suprema_string = base_func(x_d1, \
-        y_smooth_d1, y_smooth_d1_s, base_peak_list, base_directions_list, base_params)
-    # print(base_peak_list)
-    # print(base_end_arr)
-
+    base_loc_arr_blc, base_dict_blc = base_func(x_d1, \
+        y_smooth_d1, y_smooth_d1_s, base_peak_list, base_directions_list, base_params,
+        verbose=verbose)
     # Adjust the indices (for the 2nd derivative method)
-    for i in range(len(suprema_string)):
-        if suprema_string[i] == "1":
-            base_end_arr[i] = base_end_arr[i] + adjust_index
+    for i in range(len(base_dict_blc["suprema_string"])):
+        if base_dict_blc["suprema_string"][i] == "1":
+            base_loc_arr_blc[i] = base_loc_arr_blc[i] + adjust_index
         else:
             pass
-    # print("adjusted base end array")
-    # print(base_end_arr)
 
-    if "0" in base_string:
-        error_string = "Baseline correction failed: " + error_string
+    if "0" in base_dict_blc["base_string"]:
+        base_dict_blc["base_string"] = "Baseline correction failed: " + base_dict_blc["base_string"]
         width = np.nan
+        base_dict = base_dict_blc
     else:
         # Perform baseline correction
         y_smooth_blc, baseline_correction = fit_baseline(x_data, y_smooth, \
-            base_end_arr)
+            base_loc_arr_blc)
         
         # Calculate the width
-        width, error_string = calculate_width_min_max(x_data, y_smooth_blc, \
-            smooth_func, smooth_params, base_func, base_params, adjust_index)
+        width, base_dict = calculate_width_min_max(x_data, y_smooth_blc, \
+            smooth_func, smooth_params, base_func, base_params, adjust_index, \
+            verbose=verbose)
 
-    return width, error_string
+        if verbose:
+            # Add the blc dict to the base_dict
+            for key, item in base_dict_blc.items():
+                base_dict[f"{key}_blc"] = item
+            base_dict["y_smooth_blc"] = y_smooth_blc
+            base_dict["baseline_correction"] = baseline_correction
+        else:
+            pass
+            
+    if verbose:
+        base_dict["d1_data_blc"] = (x_d1, y_smooth_d1, y_smooth_d1_s)
+        base_dict["d1_peak_list_blc"] = base_peak_list
+        base_dict["base_loc_arr_blc"] = base_loc_arr_blc
+    else:
+        pass
+
+    return width, base_dict
 
 # Reading settings
 def read_TEM_length_settings(settings_path):
