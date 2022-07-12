@@ -523,18 +523,18 @@ def TEM_ring_main():
         
         if use_baseline:
             # Calculate the widths (baseline correction)
-            width_array, error_string = calculate_ring_baseline_correction(x_data, \
+            width_array, base_dict = calculate_ring_baseline_correction(x_data, \
                 y_smooth, smooth_func, smooth_params, base_func, base_params, \
                 adjust_index, midpoint_window, split_frac)
-            width_array_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
+            width_array_1, base_dict_1 = calculate_ring_baseline_correction(x_data_1, \
                 y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
                 adjust_index, midpoint_window, split_frac)
         else:
             # Calculate the widths (no baseline correction)
-            width_array, error_string = calculate_ring_min_max(x_data, y_smooth, \
+            width_array, base_dict = calculate_ring_min_max(x_data, y_smooth, \
                 smooth_func, smooth_params, base_func, base_params, adjust_index, \
                 midpoint_window, split_frac)
-            width_array_1, error_string_1 = calculate_ring_min_max(x_data_1, \
+            width_array_1, base_dict_1 = calculate_ring_min_max(x_data_1, \
                 y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
                 adjust_index, midpoint_window, split_frac)
         
@@ -575,14 +575,14 @@ def TEM_ring_main():
         pore_sample_stdev_arr[i] = pore_width_sample_stdev
 
         # Record any errors
-        if len(error_string)>0:
-            error_message = f"Sample: {i}, Measurement: 1, {error_string}"
+        if len(base_dict["error_string"])>0:
+            error_message = f"Sample: {i}, Measurement: 1, {base_dict['error_string']}"
             error_list.append(error_message)
             print(error_message)
         else:
             pass
-        if len(error_string_1)>0:
-            error_message = f"Sample: {i}, Measurement: 2, {error_string_1}"
+        if len(base_dict_1["error_string"])>0:
+            error_message = f"Sample: {i}, Measurement: 2, {base_dict_1['error_string']}"
             error_list.append(error_message)
             print(error_message)
         else:
