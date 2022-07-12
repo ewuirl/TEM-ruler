@@ -807,18 +807,17 @@ def TEM_length_main():
         y_smooth = smooth_func(y_data, *smooth_params)
         # Calculate the width
         if use_baseline:
-            width, error_string = calc_width_baseline_correction(x_data, y_smooth, \
+            width, base_dict = calc_width_baseline_correction(x_data, y_smooth, \
                 smooth_func, smooth_params, base_func, base_params, adjust_index)
         else:
-            width, error_string = calculate_width_min_max(x_data, y_smooth, \
+            width, base_dict = calculate_width_min_max(x_data, y_smooth, \
                 smooth_func, smooth_params, base_func, base_params, adjust_index)
         # Record the data
         width_array[i] = width
         # Record any errors
-        if len(error_string)>0:
-            error_message = f"Sample: {i} {error_string}"
+        if len(base_dict["error_string"])>0:
+            error_message = f"Sample: {i} {base_dict['error_string']}"
             error_list.append(error_message)
-            print(error_message)
         else:
             pass
 
