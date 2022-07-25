@@ -972,14 +972,14 @@ def write_header(custom_name, file_name, smooth_method, smooth_params, \
         header_file.write(f"Smoothing method: {smooth_method}\n")
         header_file.write(f"Smoothing parameters: {smooth_params}\n")
         header_file.write(f"Baseline correction: {use_baseline}\n")
-        header_file.write(f"Base finding method: {base_method}\n")
+        header_file.write(f"Edge end estimation method: {base_method}\n")
         if base_method == "2nd derivative threshold":
             d2_threshold, step_size, threshold, max_steps, smooth_func, \
             smooth_params = base_params
             base_params = (d2_threshold, step_size, threshold, max_steps)
         else:
             pass
-        header_file.write(f"Base finding parameters: {base_params}\n")
+        header_file.write(f"Edge end estimation parameters: {base_params}\n")
         header_file.write(f"Width calculation method: {width_method}\n")
         header_file.write(f"Note: {note}\n")
         # Unpack the summary stats
@@ -1029,25 +1029,25 @@ def TEM_length_main():
 
     """
     # Argument parser
-    parser = argparse.ArgumentParser(description="Takes in an excel or txt file of TEM \
+    parser = argparse.ArgumentParser(description="Takes in a .xslx or .txt file of TEM \
         grayscale profiles and computes the lengths of the objects using a half \
         max full width approach. Results are saved in the same folder as the input file.")
     parser.add_argument("read_file_path", type=str, \
-        help="The path to the excel file to analyze.")
+        help="The path to the .xslx or .txt data file to analyze.")
     parser.add_argument("--save_name", type=str, \
-        help="A custom name to add to save file names that results are saved to.")
+        help="A custom name to append to names of files that results are saved to.")
     parser.add_argument("--save_folder", type=str, \
-        help="Path to the folder to save results to.")
+        help="Path to the folder to save results in.")
     parser.add_argument("--baseline", type=str, 
         help="If True, applies a baseline correction before trying to determine the length. Defaults to True.")
     parser.add_argument("--settings", type=str, \
-        help="The path to the file containing analysis settings.")
+        help="The path to a file containing analysis settings.")
     parser.add_argument("--transpose", type=str, \
-        help="Set as True if the input data is transposed (each sample is a row). Defaults to False.")
+        help="Set as True if the input data is transposed (samples are organized in rows). Defaults to False.")
     parser.add_argument("--note", type=str, \
-        help="A note to add to the header file")
+        help="A note to add to the header file.")
     parser.add_argument("--prog", type=str, \
-        help="If True, prints sample number to terminal as it is being analyzed. Defaults to False")
+        help="If True, prints sample number to terminal as it is being analyzed. Defaults to False.")
 
     args = parser.parse_args()
 
