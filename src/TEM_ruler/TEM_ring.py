@@ -20,6 +20,26 @@ from TEM_ruler.TEM_length import determine_os
 
 # Figure out midpoint of ring
 def find_ring_bounds(y_smooth, window, split_frac=0.2):
+    """Finds the midpoint and bounding points for the 1st derivative peak 
+    search.
+
+    Args:
+        y_smooth (numpy arr): The smoothed y (height) data. 
+        window (int): The distance (in indices) of the winow size to search for
+            the ring midpoint.
+        split_frac (float): The fraction of data in the middle to ignore when 
+            searching for 1st derivative peaks. (Default value = 0.2)
+
+    Returns:
+        left_bound (int): Index of the left bound of the midpoint.
+        right_bound (int): Index of the right bound of the midpoint.
+        midpoint (int): Index of the midpoint.
+        left_bound (int): Index of the right bound of the left 1st derivative
+            peak search.
+        right_bound (int): Index of the left bound of the right 1st derivative
+            peak search.
+
+    """
     mid_point = int(len(y_smooth)/2)
     left_bound = mid_point-int(window/2)
     right_bound = mid_point+int(window/2)
@@ -38,6 +58,26 @@ def find_ring_bounds(y_smooth, window, split_frac=0.2):
 
 # Width calculation methods
 def calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr, verbose=False):
+    """Calculates the widths of the ring thickness (2 measurements) and the pore.
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        base_loc_arr (numpy arr): An array of the base locations (indices) of 
+            the 1st derivative peaks.
+        verbose (bool): If True, saves half max data in base_dict. (Default 
+            value = False) (Default value = False)
+
+    Returns:
+        widths_array (numpy arr): The widths of the ring thickness and the pore.
+        half_max_dict (dict): Contains auxiliary information.
+            error_string (str): Records an error if the width was negative.
+            half_max_positions (numpy arr): The extrapolated x positions for the 
+                half max values. Present if verbose=TRUE.
+            half_max_vals (numpy arr): The half max values of the edges. Present 
+                if verbose=TRUE.
+
+    """
     widths_array = np.zeros(3)
 
     left_half_max_positions, left_half_max_vals = \
@@ -71,7 +111,52 @@ def calculate_half_max_full_width_ring(x_data, y_smooth, base_loc_arr, verbose=F
     return (widths_array, half_max_dict)
 
 def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index, midpoint_window, split_frac, verbose=False):
+    base_func, base_params, midpoint_window, split_frac, verbose=False):
+    """Calculates the widths of the ring thickness (2 measurements) and the pore
+    with the specified base function.
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        smooth_func (func): A smoothing function.
+        smooth_params (tuple): Parameters for smooth_func.
+        base_func (func): The function to find the base locations of the 1st 
+            derivative. find_base_d1 or find_base_d2.
+        base_params (tuple): Parameters for the specified base_func.
+        midpoint_window (int): The distance (in indices) of the winow size to 
+            search for the ring midpoint.
+        split_frac (float): The fraction of data in the middle to ignore when 
+            searching for 1st derivative peaks. (Default value = 0.2)
+        verbose: Records auxiliary information in base_dict if True. (Default 
+            value = False)
+
+    Returns:
+        widths_array (numpy arr): The widths of the ring thickness and the pore.
+        base_dict (dict): Contains error messages and auxiliary information.
+            error_string (str): Records any errors that may have occurred.
+            left_bound (int): Index of the left bound of the midpoint.
+                Present if verbose=TRUE.
+            right_bound (int): Index of the right bound of the midpoint.
+                Present if verbose=TRUE.
+            midpoint (int): Index of the midpoint. Present if verbose=TRUE.
+            left_bound (int): Index of the right bound of the left 1st derivative
+                peak search. Present if verbose=TRUE.
+            right_bound (int): Index of the left bound of the right 1st derivative
+                peak search. Present if verbose=TRUE.
+            d1_data (tuple): A tuple of 1st derivative data. Present if verbose=TRUE.
+                x_d1 (numpy arr): 1st derivative x positions.
+                y_smooth_d1 (numpy arr): 1st derivative of the smoothed y data.
+                y_smooth_d1_s (numpy arr): Smoothed 1st derivative.
+            d1_peak_list (list): A list of 1st derivative peak locations 
+                (x indices). Present if verbose=TRUE.
+            base_loc_arr (numpy arr): An array of the base locations (indices) of 
+                the 1st deriative peaks. Present if verbose=TRUE.
+            half_max_positions (numpy arr): The extrapolated x positions for the 
+                half max values. Present if verbose=TRUE.
+            half_max_vals (numpy arr): The half max values of the edges. Present 
+                if verbose=TRUE.
+
+    """
     # Find the midpoint of the ring
     left_bound, right_bound, midpoint, left_split, right_split = \
     find_ring_bounds(y_smooth, midpoint_window, split_frac=split_frac)
@@ -104,7 +189,7 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
         # Adjust the indices (for the 2nd derivative method)
         for i in range(len(base_dict["suprema_string"])):
             if base_dict["suprema_string"][i] == "1":
-                base_loc_arr[i] = base_loc_arr[i] + adjust_index
+                base_loc_arr[i] = base_loc_arr[i] + 1
             else:
                 pass
 
@@ -136,6 +221,19 @@ def calculate_ring_min_max(x_data, y_smooth, smooth_func, smooth_params, \
 
 # Baseline Fitting Functions
 def fit_ring_baseline(x_data, y_smooth, base_end_arr):
+    """Performs a baseline correction to a ring feature (2 plateaus).
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        base_loc_arr (numpy arr): An array containing the indices of the exterior
+            base points of the two ring plateaus.
+
+    Returns:
+        y_smooth_blc (numpy arr): The baseline corrected smoothed y data.
+        baseline_correction (numpy arr): The applied baseline correction.
+
+    """
     # Create an array to store the baseline correction
     baseline_correction = np.zeros(len(x_data))
 
@@ -192,7 +290,54 @@ def fit_ring_baseline(x_data, y_smooth, base_end_arr):
     return y_smooth_blc, baseline_correction
 
 def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index, midpoint_window, split_frac, verbose=False):
+    base_func, base_params, midpoint_window, split_frac, verbose=False):
+    """Performs a baseline correction and then falculates the widths of the ring 
+    thickness (2 measurements) and the pore with the specified base function
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        smooth_func (func): A smoothing function.
+        smooth_params (tuple): Parameters for smooth_func.
+        base_func (func): The function to find the base locations of the 1st 
+            derivative. find_base_d1 or find_base_d2.
+        base_params (tuple): Parameters for the specified base_func.
+        midpoint_window (int): The distance (in indices) of the winow size to 
+            search for the ring midpoint.
+        split_frac (float): The fraction of data in the middle to ignore when 
+            searching for 1st derivative peaks.
+        verbose: Records auxiliary information in base_dict if True. (Default 
+            value = False)
+
+    Returns:
+        widths_array (numpy arr): The widths of the ring thickness and the pore.
+        base_dict (dict): Contains error messages and auxiliary information. If 
+            verbose=TRUE, also contains auxiliary information used for the 
+            baseline correction (keys end in '_blc').
+            error_string (str): Records any errors that may have occurred.
+            left_bound (int): Index of the left bound of the midpoint.
+                Present if verbose=TRUE.
+            right_bound (int): Index of the right bound of the midpoint.
+                Present if verbose=TRUE.
+            midpoint (int): Index of the midpoint. Present if verbose=TRUE.
+            left_bound (int): Index of the right bound of the left 1st derivative
+                peak search. Present if verbose=TRUE.
+            right_bound (int): Index of the left bound of the right 1st derivative
+                peak search. Present if verbose=TRUE.
+            d1_data (tuple): A tuple of 1st derivative data. Present if verbose=TRUE.
+                x_d1 (numpy arr): 1st derivative x positions.
+                y_smooth_d1 (numpy arr): 1st derivative of the smoothed y data.
+                y_smooth_d1_s (numpy arr): Smoothed 1st derivative.
+            d1_peak_list (list): A list of 1st derivative peak locations 
+                (x indices). Present if verbose=TRUE.
+            base_loc_arr (numpy arr): An array of the base locations (indices) of 
+                the 1st deriative peaks. Present if verbose=TRUE.
+            half_max_positions (numpy arr): The extrapolated x positions for the 
+                half max values. Present if verbose=TRUE.
+            half_max_vals (numpy arr): The half max values of the edges. Present 
+                if verbose=TRUE.
+
+    """
     # Find the midpoint of the ring
     left_bound, right_bound, midpoint, left_split, right_split = \
     find_ring_bounds(y_smooth, midpoint_window, split_frac=split_frac)
@@ -217,7 +362,7 @@ def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_par
     # Adjust the indices (for the 2nd derivative method)
     for i in range(len(base_dict_blc["suprema_string"])):
         if base_dict_blc["suprema_string"][i] == "1":
-            base_loc_arr_blc[i] = base_loc_arr_blc[i] + adjust_index
+            base_loc_arr_blc[i] = base_loc_arr_blc[i] + 1
         else:
             pass
     if "0" in base_dict_blc["base_string"]:
@@ -230,8 +375,8 @@ def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_par
             base_loc_arr_blc)
         # Calculate the half max full width
         widths_array, base_dict = calculate_ring_min_max(x_data, y_smooth_blc, \
-            smooth_func, smooth_params, base_func, base_params, adjust_index, \
-            midpoint_window, split_frac, verbose=verbose)
+            smooth_func, smooth_params, base_func, base_params, midpoint_window, \
+            split_frac, verbose=verbose)
         # Handle verbose
         if verbose:
             # Add the blc dict to the base_dict
@@ -258,6 +403,30 @@ def calculate_ring_baseline_correction(x_data, y_smooth, smooth_func, smooth_par
 
 # Reading settings
 def read_TEM_ring_settings(settings_path):
+    """Used to read in custom TEM_ring settings. If settings are not specified
+    in the settings file, default values are used.
+
+    Args:
+      settings_path (str): Path to a settings .txt file. 
+
+    Returns:
+        smooth_method (str): The smoothing method. Currently only uses
+            'savgol'.
+        smooth_func (func): A smoothing function.
+        smooth_params (tuple): Parameters for smooth_func.
+        width_method (str): The width calculation method. Currently only uses
+            'min_max'.
+        base_method (str): Which base method to use. '1st derivative threshold'
+            or '2nd derivative threshold'.
+        base_func (func): The function to find the base locations of the 1st 
+            derivative. find_base_d1 or find_base_d2.
+        base_params (tuple): Parameters for the specified base_func.
+        midpoint_window (int): The distance (in indices) of the winow size to 
+            search for the ring midpoint.
+        split_frac (float): The fraction of data in the middle to ignore when 
+            searching for 1st derivative peaks.
+
+    """
     # Default settings
     smooth_method = "savgol"
     smooth_func = signal.savgol_filter
@@ -272,7 +441,6 @@ def read_TEM_ring_settings(settings_path):
     base_params = (step_size, threshold, max_steps)
     # x position of 2nd derivative is shifted by 1 from the x position of 
     # the TEM profile
-    adjust_index = 1 
     midpoint_window = 10
     split_frac = 0.2
 
@@ -325,12 +493,57 @@ def read_TEM_ring_settings(settings_path):
                 # Stop the script execution
                 sys.exit(1)
     return (smooth_method, smooth_func, smooth_params, width_method, base_method, \
-        base_func, base_params, adjust_index, midpoint_window, split_frac)
+        base_func, base_params, midpoint_window, split_frac)
 
 # Writing Output Files
 def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
-    base_method, base_params, use_baseline, width_method, midpoint_window, \
-    error_list, summary_stats, note):
+    base_method, base_params, use_baseline, width_method, midpoint_window, 
+    split_frac, error_list, summary_stats, note):
+    """
+
+    Args:
+        custom_name (str): Appends the custom name to the end of the file. 
+        file_name (str): The name of the read file.
+        smooth_method (str): The smoothing method. Currently only uses
+            'savgol'.
+        smooth_params (tuple): Parameters for smooth_func.
+        base_method (str): Which base method to use. '1st derivative threshold'
+            or '2nd derivative threshold'.
+        base_params (tuple): Parameters for the specified base_func.
+        use_baseline:
+        width_method (str): The width calculation method. Currently only uses
+            'min_max'.
+        midpoint_window (int): The distance (in indices) of the winow size to 
+            search for the ring midpoint.
+        split_frac (float): The fraction of data in the middle to ignore when 
+            searching for 1st derivative peaks.
+        error_list (list): A list of all the errors generated.
+        summary_stats (tuple): 
+            num_samples (int): The total number of measurements.
+            num_ring_samples (int): The number of rings analyzed in the summary
+                statistics.
+            num_ring_measurements (int): The number of ring measurements used in
+                the summary statistics.
+            ring_mean (float): The mean ring thickness.
+            ring_std_err (float): The standard error of the mean ring thickness.
+            ring_median (float): The median ring thickness.
+            ring_sample_stdev (float): The sample standard deviation of the ring
+                thickness.
+            num_pore_samples (int): The number of pores analyzed in the summary
+                statistics.
+            num_pore_measurements (int): The number of pore measurements analyzed
+                in the summary statistics.
+            pore_mean (float): The mean pore width.
+            pore_std_err (float): The standard error of the mean pore width.
+            pore_median (float): The median pore width.
+            pore_sample_stdev (float): The sample standard deviation of the pore
+                width.
+        note (str): A custom note.
+
+    Returns:
+        None. Outputs a .txt header file.
+
+    """
     if len(custom_name) > 0:
         add_name = f"_{custom_name}"
     else:
@@ -339,6 +552,7 @@ def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
         # Record the calculation methods and settings
         header_file.write("######## Calculation settings ########\n")
         header_file.write(f"Center finding window size: {midpoint_window}\n")
+        header_file.write(f"Data split fraction: {split_frac}\n")
         header_file.write(f"Smoothing method: {smooth_method}\n")
         header_file.write(f"Smoothing parameters: {smooth_params}\n")
         header_file.write(f"Baseline correction: {use_baseline}\n")
@@ -354,7 +568,7 @@ def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
         header_file.write(f"Note: {note}\n")
         # Unpack the summary stats
         num_samples, num_ring_samples, num_ring_measurements, ring_mean, \
-        ring_std_err, ring_median, ring_sample_stdev , num_pore_samples, \
+        ring_std_err, ring_median, ring_sample_stdev, num_pore_samples, \
         num_pore_measurements, pore_mean, pore_std_err, pore_median, \
         pore_sample_stdev = summary_stats
         # Record the summary stats
@@ -386,6 +600,24 @@ def write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
 
 def write_ring_measurement_data(custom_name, file_name, ring_width_array, ring_mean_arr, \
     ring_stdev_arr, pore_width_array, pore_mean_arr, pore_stdev_arr):
+    """Writes the calculated widths to a .txt file.
+
+    Args:
+        custom_name (str): Appends the custom name to the end of the file. 
+        file_name (str): The name of the read file.
+        width_array (numpy arr): Contains all the calculated widths.
+        ring_width_array (numpy arr): All the calculated ring thicknesses.
+        ring_mean_arr (numpy arr): The mean ring thickness per ring.
+        ring_stdev_arr (numpy arr): The standard deviation of ring thickness per
+            ring.
+        pore_width_array (numpy arr): All the calculated pore thicknesses.
+        pore_mean_arr (numpy arr): The mean pore width per ring.
+        pore_stdev_arr (numpy arr): The standard deviation of pore width per ring.
+
+    Returns:
+        None. Outputs a .txt data file.
+
+    """
     if len(custom_name) > 0:
         add_name = f"_{custom_name}"
     else:
@@ -406,10 +638,23 @@ def write_ring_measurement_data(custom_name, file_name, ring_width_array, ring_m
             data_file.write(f"{pore_stdev_arr[i]}\n")
 
 def TEM_ring_main():
+    """Handles commandline input and runs width calculation analyses of a 
+    supplied file of ring data. Assumes each ring has been measured twice, \
+        and that these measurements are sequential.
+
+    Args: 
+        None. Uses commandline input.
+
+    Returns:
+        None. Outputs header and data .txt files.
+        
+    """
     # Argument parser
-    parser = argparse.ArgumentParser(description="akes in an excel or txt file of TEM \
-        grayscale profiles and computes the lengths of the objects using a half \
-        max full width approach. Results are saved in the same folder as the input file.")
+    parser = argparse.ArgumentParser(description="Takes in an excel or txt file of TEM \
+        grayscale profiles of rings and computes the widths of the ring thickness \
+        and pore using a half max full width approach. Results are saved in the \
+        same folder as the input file. Assumes each ring has been measured twice, \
+        and that these measurements are sequential.")
     parser.add_argument("read_file_path", type=str, \
         help="The path to the excel file to analyze.")
     parser.add_argument("--save_name", type=str, \
@@ -462,7 +707,7 @@ def TEM_ring_main():
     else:
         settings_path = "default"
     smooth_method, smooth_func, smooth_params, width_method, base_method, \
-    base_func, base_params, adjust_index, midpoint_window, split_frac = \
+    base_func, base_params, midpoint_window, split_frac = \
     read_TEM_ring_settings(settings_path)
 
     # Determine if data is transposed
@@ -483,10 +728,10 @@ def TEM_ring_main():
         progress = False
 
     # Read the file in 
-    length_df = read_TEM_data(read_file_path, transpose=is_transpose)
+    TEM_df = read_TEM_data(read_file_path, transpose=is_transpose)
 
     # Get the shape
-    rows, cols = length_df.shape
+    rows, cols = TEM_df.shape
     num_samples = int(cols/4)
     
     # Arrays to store data and calculations in 
@@ -510,13 +755,9 @@ def TEM_ring_main():
         x_index = 4*i
         
         # Remove the NaN values
-        x_data, y_data = exclude_NaN(x_index, length_df)
-        x_data_1, y_data_1 = exclude_NaN(x_index+2, length_df)
+        x_data, y_data = exclude_NaN(x_index, TEM_df)
+        x_data_1, y_data_1 = exclude_NaN(x_index+2, TEM_df)
         
-
-        # print(f"Measurement 1 # data: {len(x_data)}")
-        # print(f"Measurement 2 # data: {len(x_data_1)}")    
-
         # Smooth the data
         y_smooth = smooth_func(y_data, *smooth_params)
         y_smooth_1 = smooth_func(y_data_1, *smooth_params)
@@ -525,10 +766,10 @@ def TEM_ring_main():
             # Calculate the widths (baseline correction)
             width_array, base_dict = calculate_ring_baseline_correction(x_data, \
                 y_smooth, smooth_func, smooth_params, base_func, base_params, \
-                adjust_index, midpoint_window, split_frac)
+                midpoint_window, split_frac)
             width_array_1, base_dict_1 = calculate_ring_baseline_correction(x_data_1, \
                 y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
-                adjust_index, midpoint_window, split_frac)
+                midpoint_window, split_frac)
         else:
             # Calculate the widths (no baseline correction)
             width_array, base_dict = calculate_ring_min_max(x_data, y_smooth, \
@@ -536,7 +777,7 @@ def TEM_ring_main():
                 midpoint_window, split_frac)
             width_array_1, base_dict_1 = calculate_ring_min_max(x_data_1, \
                 y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
-                adjust_index, midpoint_window, split_frac)
+                midpoint_window, split_frac)
         
         # Record the data
         ring_width_array[i,:2] = width_array[:2]
@@ -620,7 +861,7 @@ def TEM_ring_main():
     print("Writing header.")
     write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
         base_method, base_params, use_baseline, width_method, midpoint_window, \
-        error_list, summary_stats, note)
+        split_frac, error_list, summary_stats, note)
     # Write a data file
     print("Writing measurement data file.")
     write_ring_measurement_data(custom_name, file_name, ring_width_array, \
@@ -630,174 +871,3 @@ def TEM_ring_main():
 
 if __name__ == "__main__":
     TEM_ring_main()
-    # Add argparse stuff
-
-    # # Hard code some stuff
-    # midpoint_window = 10
-    # smooth_func = signal.savgol_filter
-    # smooth_params = (9, 3)
-    # d2_threshold = 2
-    # step_size = 2
-    # threshold = 2
-    # max_steps = 20
-    # Base finding method
-    # Zero crossing method
-    # base_method = "1st derivative threshold"
-    # adjust_index = 0
-    # base_params = (step_size, threshold, max_steps)
-    # base_func = find_base_d1
-    # custom_name = "serial_d1_zero"
-    # 2nd derivative method
-    # base_method = "2nd derivative threshold"
-    # adjust_index = 1
-    # base_params = (d2_threshold, step_size, threshold, max_steps, smooth_func, smooth_params)
-    # base_func = find_base_d2
-    # custom_name = "serial_d2_threshold"
-    # custom_name = "serial_d2_threshold_baseline_correction"
-
-
-    # custom_name = "serial"
-    # file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/42hb polyplex no stain xy values length.xlsx"
-    # file_path = "/Users/emilywu/OneDrive - Massachusetts Institute of Technology/TEM width/xy dimensions ring 125x silica.xlsx"
-    # file_name = "42hb polyplex no stain xy values length"
-    # file_name = "xy dimensions ring 125x silica"
-    # smooth_method = "savgol"
-    # width_method = "min_max"
-    # note = ""
-
-    # # Read the file in 
-    # length_df = pd.read_excel(file_path, header=None,names=None)
-
-    # # Get the shape
-    # rows, cols = length_df.shape
-    # num_samples = int(cols/4)
-    # # num_samples = 2
-    
-    # ring_width_array = np.zeros((num_samples,4))
-    # pore_width_array = np.zeros((num_samples,2))
-    # ring_mean_arr = np.zeros(num_samples)
-    # pore_mean_arr = np.zeros(num_samples)
-    # ring_sample_stdev_arr = np.zeros(num_samples)
-    # pore_sample_stdev_arr = np.zeros(num_samples)
-    # error_list = []
-
-    # Serial analysis (no baseline correction)
-    # for i in range(num_samples):
-    #     print(i)
-    #     # Pick the x columns
-    #     x_index = 2*i
-        
-    #     # Remove the NaN values
-    #     x_data, y_data = exclude_NaN(x_index, length_df)
-    #     x_data_1, y_data_1 = exclude_NaN(x_index+2, length_df)
-
-    #     # print(f"Measurement 1 # data: {len(x_data)}")
-    #     # print(f"Measurement 2 # data: {len(x_data_1)}")    
-
-    #     # Smooth the data
-    #     y_smooth = smooth_func(y_data, *smooth_params)
-    #     y_smooth_1 = smooth_func(y_data_1, *smooth_params)
-        
-    #     # # Calculate the widths (no baseline correction)
-    #     # width_array, error_string = calculate_ring_min_max(x_data, y_smooth, \
-    #     #     smooth_func, smooth_params, base_func, base_params, adjust_index, \
-    #     #     midpoint_window)
-    #     # width_array_1, error_string_1 = calculate_ring_min_max(x_data_1, y_smooth_1, \
-    #     #     smooth_func, smooth_params, base_func, base_params, adjust_index, \
-    #     #     midpoint_window)
-
-    #     # Calculate the widths (baseline correction)
-    #     width_array, error_string = calculate_ring_baseline_correction(x_data, \
-    #         y_smooth, smooth_func, smooth_params, base_func, base_params, \
-    #         adjust_index, midpoint_window)
-    #     width_array_1, error_string_1 = calculate_ring_baseline_correction(x_data_1, \
-    #         y_smooth_1, smooth_func, smooth_params, base_func, base_params, \
-    #         adjust_index, midpoint_window)
-        
-    #     # Record the data
-    #     ring_width_array[i,:2] = width_array[:2]
-    #     ring_width_array[i, 2:] = width_array_1[:2]
-    #     pore_width_array[i, 0] = width_array[2]
-    #     pore_width_array[i, 1] = width_array_1[2]
-
-    #     # Calculate mean and standard deviation
-    #     ring_widths_clean = ring_width_array[i,np.logical_not(np.isnan(ring_width_array[i,:]))]
-    #     pore_widths_clean = pore_width_array[i,np.logical_not(np.isnan(pore_width_array[i,:]))]
-    #     if len(ring_widths_clean) > 1:
-    #         ring_width_mean = np.mean(ring_widths_clean)
-    #         # Finite number of measurements --> compute sample stdev
-    #         ring_width_sample_stdev = np.std(ring_widths_clean, ddof=1)  
-    #     elif len(ring_widths_clean) > 1:
-    #         ring_width_mean = ring_widths_clean[0]
-    #         ring_width_sample_stdev = 0
-    #     else:
-    #         ring_width_mean = np.nan 
-    #         ring_width_sample_stdev = np.nan 
-    #     if len(pore_widths_clean) > 1:
-    #         pore_width_mean = np.mean(pore_widths_clean)
-    #         # Finite number of measurements --> compute sample stdev
-    #         pore_width_sample_stdev = np.std(pore_widths_clean, ddof=1)  
-    #     elif len(pore_widths_clean) > 1:
-    #         pore_width_mean = pore_widths_clean[0]
-    #         pore_width_sample_stdev = 0
-    #     else:
-    #         pore_width_mean = np.nan 
-    #         pore_width_sample_stdev = np.nan 
-    #     # Record the mean and standard deviation
-    #     ring_mean_arr[i] = ring_width_mean
-    #     ring_sample_stdev_arr[i] = ring_width_sample_stdev
-    #     pore_mean_arr[i] = pore_width_mean
-    #     pore_sample_stdev_arr[i] = pore_width_sample_stdev
-
-    #     # Record any errors
-    #     if len(error_string)>0:
-    #         error_message = f"Sample: {i}, Measurement: 1, {error_string}"
-    #         error_list.append(error_message)
-    #         print(error_message)
-    #     else:
-    #         pass
-    #     if len(error_string_1)>0:
-    #         error_message = f"Sample: {i}, Measurement: 2, {error_string_1}"
-    #         error_list.append(error_string_1)
-    #         print(error_message)
-    #     else:
-    #         pass
-
-    # # Calculate the mean, median, and standard deviation
-    # ring_width_array_clean = ring_width_array[np.logical_not(np.isnan(ring_width_array))]
-    # ring_mean_arr_clean = ring_mean_arr[np.logical_not(np.isnan(ring_mean_arr))]
-    # ring_sample_stdev_arr_clean = ring_sample_stdev_arr[np.logical_not(np.isnan(ring_sample_stdev_arr))]
-    # ring_mean = np.mean(ring_mean_arr_clean)
-    # ring_median = np.median(ring_mean_arr_clean)
-    # num_ring_samples_clean = len(ring_mean_arr_clean)
-    # num_ring_measurements_clean = len(ring_width_array_clean)
-    # ring_std_err = np.sqrt(np.sum(np.square(ring_sample_stdev_arr_clean)))/num_ring_samples_clean
-    # ring_sample_stdev = np.std(ring_width_array_clean, ddof=1)
-
-    # pore_width_array_clean = pore_width_array[np.logical_not(np.isnan(pore_width_array))]
-    # pore_mean_arr_clean = pore_mean_arr[np.logical_not(np.isnan(pore_mean_arr))]
-    # pore_sample_stdev_arr_clean = pore_sample_stdev_arr[np.logical_not(np.isnan(pore_sample_stdev_arr))]
-    # pore_mean = np.mean(pore_mean_arr_clean)
-    # pore_median = np.median(pore_mean_arr_clean)
-    # num_pore_samples_clean = len(pore_mean_arr_clean)
-    # num_pore_measurements_clean = len(pore_width_array_clean)
-    # pore_std_err = np.sqrt(np.sum(np.square(pore_sample_stdev_arr_clean)))/num_pore_samples_clean
-    # pore_sample_stdev = np.std(pore_width_array_clean, ddof=1)
-    
-    # # Pack up the stats
-    # summary_stats = num_samples, num_ring_samples_clean, num_ring_measurements_clean, \
-    # ring_mean, ring_std_err, ring_median, ring_sample_stdev , \
-    # num_pore_samples_clean, num_pore_measurements_clean, pore_mean, pore_std_err, \
-    # pore_median, pore_sample_stdev 
-
-    # # Save the data
-    # # Write a header file
-    # write_ring_header(custom_name, file_name, smooth_method, smooth_params, \
-    #     base_method, base_params, width_method, midpoint_window, error_list, \
-    #     summary_stats, note)
-    # # Write a data file
-    # write_ring_measurement_data(custom_name, file_name, ring_width_array, \
-    #     ring_mean_arr, ring_sample_stdev_arr, pore_width_array, pore_mean_arr, \
-    #     pore_sample_stdev_arr)
-
-    

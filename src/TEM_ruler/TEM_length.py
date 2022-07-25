@@ -6,36 +6,58 @@ from scipy import signal
 from sklearn.linear_model import LinearRegression
 
 class FileInputError(Exception):
+    """Read file is not an accepted format."""
     pass
 
 def determine_os():
+    """Determines the OS type to figure out how paths are formatted.
+
+    Returns:
+        file_separation (str): Returns '\\' if Windows, '/' if other.
+
+    """
     # Windows
     if sys.platform == "win32":
         return "\\"
-    # Not windows
+    # Not Windows
     else:
         return "/"
 
 # Data Reading Methods
 def read_TEM_data(read_file_path, transpose=False):
+    """Reads in a TEM data file (.xlsx or tab separated .txt).
+
+    Args:
+        read_file_path (str): The path to the TEM data file. 
+        transpose (bool): True if the data is transposed (rows). (Default value 
+            = False)
+
+    Returns:
+        TEM_df (pd.DataFrame): A pandas dataframe containing the TEM data.
+
+    Raises:
+        FileInputError: If the read file is not a supported format (xlsx or tab 
+            separated .txt)
+
+    """
     try:
         if read_file_path[-5:] == ".xlsx":
             # Read the file in 
-            length_df = pd.read_excel(read_file_path, header=None, names=None, \
+            TEM_df = pd.read_excel(read_file_path, header=None, names=None, \
                 dtype=float)
 
         elif read_file_path[-4:] == ".txt":
-            length_df = pd.read_table(read_file_path, header=None, \
+            TEM_df = pd.read_table(read_file_path, header=None, \
                     names=None, dtype=float)
         else:
             raise FileInputError("FileInputError: Supplied file is not an xlsx or tab separated txt file.")
 
         if transpose:
-            length_df = length_df.transpose()
+            TEM_df = TEM_df.transpose()
         else:
             pass
 
-        return length_df
+        return TEM_df
 
     except(FileInputError) as msg:
         print(msg)
@@ -43,23 +65,37 @@ def read_TEM_data(read_file_path, transpose=False):
         sys.exit(1)
 
 # Data Preparation Methods
-def exclude_NaN(x_index, length_df):
-    x_data = length_df[x_index][np.logical_not(np.isnan(length_df[x_index]))]
-    y_data = length_df[x_index+1][np.logical_not(np.isnan(length_df[x_index+1]))]
+def exclude_NaN(x_index, TEM_df):
+    """Selects the specified x (position) column and corresponding y (height) column.
+    Removes any NaN values.
+
+    Args:
+        x_index (int): The index of the desired x column. 
+        TEM_df (pd.DataFrame): A pandas dataframe containing the TEM data.
+
+    Returns:
+        x_data (pd.Series): The desired x column with NaN removed.
+        y_data (pd.Series): The corresponding y column with NaN removed.
+
+    """
+    x_data = TEM_df[x_index][np.logical_not(np.isnan(TEM_df[x_index]))]
+    y_data = TEM_df[x_index+1][np.logical_not(np.isnan(TEM_df[x_index+1]))]
     return(x_data, y_data)
 
 # Derivative Methods
 def central_diff(x_vals, y_vals):
-    """
-    central_diff(x_vals, y_vals)
+    """This function calculates an approximate first derivative using the central
+    difference method.
 
-    This function calculates an approximate first derivative using the 
+    Args:
+        x_vals (arr-like): The x values.
+        y_vals (arr-like): The y values.
 
-    Arguments:
-        
     Returns:
-        x_diffs (numpy array):
-        diffs (numpy array):
+        x_diffs (numpy arr): The x positions of the derivative.
+        diffs (numpy arr): The derivative calculated with the central difference 
+            method.
+
     """
     num_diffs = len(y_vals)-1
     diffs = np.zeros(num_diffs)
@@ -73,6 +109,16 @@ def central_diff(x_vals, y_vals):
 # # Min Max Method
 # # # Zero Crossing Methods
 def check_found_edges(base_loc_arr):
+    """Checks if the 1st derivative base locations were successfully found and 
+    creates a record string.
+
+    Args:
+      base_loc_arr (numpy arr): An array of the indices of the base locations.
+
+    Returns:
+        check_string (str): Contains a "1" if the base was found and "0" if not.
+
+    """
     check_string = ""
     for location in base_loc_arr:
         if location < 0:
@@ -83,20 +129,26 @@ def check_found_edges(base_loc_arr):
 
 def find_zero_crossing(derivative, mu, direction, step_size, \
     threshold=2, max_steps=20):
+    """This function takes the first derivative, a peak location, a direction, 
+    and looks for the point at which the derivative crosses zero (or the threshold) 
+    in that direction from the peak.
+
+    Args:
+        derivative (numpy arr): The first derivative.
+        mu (int): The x index of the 1st derivative peak location.
+        direction (int): -1 if searching locations left of the peak, +1 if 
+            searching right. 
+        step_size (int): The step size to take in the search. Minimum is 1.
+        threshold (float): The threshold value at which 'zero' is found. 
+            (Default value = 2)
+        max_steps (int): The maximum number of steps before the function gives 
+            up. (Default value = 20)
+
+    Returns:
+        crossing_point (int): The x index of the 'zero crossing point'. Returns 
+            -1 if not found.
+
     """
-    find_zero_crossing(derivative, mu, step_size, direction, threshold=2, max_steps=20)
-
-    This argument takes the derivative of a function, a peak location, a 
-    direction (-1,1), and looks for the point at which the derivative crosses zero in
-    that direction from the peak.
-
-    Arguments:
-
-    Returns: 
-
-    """
-    # ADD ASSERT FOR DIRECTION
-    # print(f"peak: {mu}")
     crossing_point = -1
     found_crossing_point = False
     step = int(step_size*direction)
@@ -108,15 +160,10 @@ def find_zero_crossing(derivative, mu, direction, step_size, \
     else:
         sign = -1
     while not found_crossing_point and num_steps < max_steps:
-        # print("checking step")
-        # print(sign*derivative[check_point+step])
         test_step = check_point+step
         # Check if the test step is in bounds
-        # print(f"check if test step in bounds: {test_step}")
         if 0 <= test_step < len(derivative):
-            # if sign*derivative[test_step] > 0:
             if sign*derivative[test_step] > threshold:
-                # print(f"take step to {test_step}")
                 check_point = test_step
                 num_steps += step_count
             else:
@@ -124,7 +171,6 @@ def find_zero_crossing(derivative, mu, direction, step_size, \
                     step = direction
                     step_count = 0.5
                 else:
-                    # print("found crossing point")
                     # Pick the point closest to the threshold
                     if abs(sign*derivative[test_step]-1) > abs(sign*derivative[check_point]-1):
                         crossing_point = check_point
@@ -132,27 +178,46 @@ def find_zero_crossing(derivative, mu, direction, step_size, \
                         crossing_point = test_step
                     found_crossing_point = True
         else: 
-            # print("here!")
             # If the test step is out of bounds and the step size is greater than 1
             # Try using a smaller step size
             if abs(step) > 1:
-                # print(f"test step out of bounds, smaller steps")
-                # print("changing step size")
                 step = direction
             # If the test step is out of bounds, set the crossing point to the test step
             else:
-                # print(f"test set out of bounds, set crossing point to check point")
                 found_crossing_point = True
                 crossing_point = check_point
 
-    # print(f"found crossing point: {found_crossing_point}")
-    # print(f"crossing point: {crossing_point}")
-    # print(f"num steps: {num_steps}")
-    # print(f"checkpoint after while loop: {check_point}")
     return crossing_point
 
 def find_base_d1(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, base_params, \
-verbose=False): # Check this
+    verbose=False): 
+    """ Uses the 1st derivative threshold crossing method to find the base 
+    locations of 1st derivative peaks.
+
+    Args:
+        x_d1 (numpy arr): 1st derivative x positions.
+        y_smooth_d1 (numpy arr): 1st derivative of the smoothed y data.
+        y_smooth_d1_s (numpy arr): Smoothed 1st derivative.
+        peak_list (list): A list of 1st derivative peak locations (x indices) to
+            find base locations for. 
+        directions_list (list): A list of the corresponding directions to search 
+            in.
+        base_params (tuple): Parameters for find_zero_crossing.
+            step_size (int): The step size to take in the search. Minimum is 1.
+            threshold (float): The threshold value at which 'zero' is found. 
+            max_steps (int): The maximum number of steps to use in find_zero_crossing
+        verbose (bool): Does not affect functionality. (Default value = False)      
+
+    Returns:
+        base_loc_arr (numpy arr): An array of the base locations (indices) of 
+            the 1st deriative peaks.
+        base_dict (dict): Contains auxiliary information.
+            error_string (str): Describes any errors that have occurred.
+            base_string (str): Describes which bases were found.
+            suprema_string (str): Describes which suprema were found (not \
+                relevant for the 1st derivative method.)
+
+    """
     # Unpack the parameters
     step_size, threshold, max_steps = base_params
     # Create an array to store the base positions in
@@ -178,33 +243,22 @@ verbose=False): # Check this
     
 
 # # Second Derivative Threshold Method
-# # #
-# def find_local_supremum(data, start_point, direction, max_steps=20):
-#     supremum = -1
-#     num_steps = 0
-#     found_local_supremum = False
-#     check_point = start_point
-#     if data[check_point+direction]-data[start_point] > 0:
-#         sign = 1
-#     else:
-#         sign = -1
-#     while not found_local_supremum and num_steps < max_steps:
-#         test_step = check_point+direction
-#         # Check if the test step is in bounds
-#         if 0 <= test_step < len(data):
-#             if sign*(data[test_step]-data[check_point]) > 0:
-#                 check_point = test_step
-#             else:
-#                 supremum = check_point
-#                 found_local_supremum = True
-#             num_steps += 1
-#         else: 
-#             # If the test step is out of bounds, set the crossing point to the test step
-#             found_local_supremum = True
-#             supremum = check_point
-#     return supremum
-
 def find_local_supremum(data, start_point, direction, max_steps=20):
+    """Finds the index of the local suprema in the specified direction from 
+    the start point.
+
+    Args:
+        data (numpy arr): The data to search for a suprema in.
+        start_point (int): The index of the point to start searching from.
+        direction (int): -1 if searching locations left of the starting point, 
+            +1 if searching right. 
+        max_steps (int): The maximum number of steps before the function gives 
+            up. (Default value = 20)
+
+    Returns:
+        supremum (int): The index of the local supremum. Returns -1 if not found.
+
+    """
     supremum = -1
     num_steps = 0
     found_local_supremum = False
@@ -241,7 +295,21 @@ def find_local_supremum(data, start_point, direction, max_steps=20):
     return supremum
 
 def find_local_value(target_value, data, start_point, direction, max_steps=20):
-    """
+    """Finds the index of the target value.
+
+    Args:
+        target_value (float): The target value to find.
+        data (numpy arr): The data to search.
+        start_point (int): The index of the point to start searching from.
+        direction (int): -1 if searching locations left of the starting point, 
+            +1 if searching right. 
+        max_steps (int): The maximum number of steps before the function gives 
+            up. (Default value = 20)
+
+    Returns:
+        position (int): The index of the target value location. Returns -1 if 
+            not found.
+
     """
     position = -1
     num_steps = 0
@@ -275,7 +343,43 @@ def find_local_value(target_value, data, start_point, direction, max_steps=20):
 
 def find_base_d2(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, \
     base_params, verbose=False):
-    """
+    """Uses the 2nd derivative threshold method to find the base locations of 
+    1st derivative peaks. If unable to find a base location with this method, it
+    falls back on the 1st derivative threshold crossing method.
+
+    Args:
+        x_d1 (numpy arr): 1st derivative x positions.
+        y_smooth_d1 (numpy arr): 1st derivative of the smoothed y data.
+        y_smooth_d1_s (numpy arr): Smoothed 1st derivative.
+        peak_list (list): A list of 1st derivative peak locations (x indices) to
+            find base locations for. 
+        directions_list (list): A list of the corresponding directions to search 
+            in.
+        base_params (tuple): Parameters for find_local_supremum, 
+            find_zero_crossing, and find_local_value.
+            target_value (float): The target value to find in the 2nd derivative.
+            step_size (int): The step size to take in the search. Minimum is 1.
+            threshold (float): The threshold value at which 'zero' is found. 
+            max_steps (int): The maximum number of steps to use in the search 
+                functions.
+            smooth_func (func): A smoothing function.
+            smooth_params (tuple): Parameters for smooth_func.
+        verbose (bool): If True, saves 2nd derivative data in base_dict. 
+            (Default value = False)      
+
+    Returns:
+        base_loc_arr (numpy arr): An array of the base locations (indices) of 
+            the 1st deriative peaks.
+        base_dict (dict): Contains auxiliary information.
+            error_string (str): Describes any errors that have occurred.
+            base_string (str): Describes which bases were found.
+            suprema_string (str): Describes which local suprema were found. 
+                Contains a "1" if the suprema was found and "0" if not.
+            d2_data (tuple): 2nd derivative data. Present if verbose=TRUE
+                x_d2 (numpy arr): 2nd derivative x positions.
+                y_smooth_d2 (numpy arr): 2nd derivative (using y_smooth_d1_s)
+                y_smooth_d2_s (numpy arr): Smoothed 2nd derivative.
+
     """
     # Unpack the parameters
     target_value, step_size, threshold, max_steps, smooth_func, smooth_params = base_params
@@ -304,7 +408,7 @@ def find_base_d2(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, \
             base_loc_arr[i] = find_zero_crossing(y_smooth_d1, peak_list[i], \
                 directions_list[i], step_size, threshold=threshold, \
                 max_steps=max_steps)
-        # If a local supremum was found, find the base locatin using the 2nd 
+        # If a local supremum was found, find the base location using the 2nd 
         # derivative threshold method
         else:
             base_loc_arr[i] = find_local_value(target_value, y_smooth_d2_s, \
@@ -334,13 +438,50 @@ def find_base_d2(x_d1, y_smooth_d1, y_smooth_d1_s, peak_list, directions_list, \
 
 # Baseline Correction 
 def fit_plateau_baseline(x_data, y_data, base_end_arr):
+    """Fits a line between the exterior base points of the plateau feature.
+
+    Args:
+        x_data (arr-like): x (position) data.
+        y_data (arr-like): y (height) data.
+        base_end_arr (numpy arr): An array containing the indices of the exterior
+            base points of the feature.
+
+    Returns:
+        plateau_baseline_fit (func): Provided an x position, calculates the 
+            corresponding y value along the fitted line.
+        slope (float): The slope of the fitted line.
+        intercept (float): The intercept of the fitted line.
+
+    """
     slope = (y_data[base_end_arr[1]]-y_data[base_end_arr[0]])/(x_data[base_end_arr[1]]-x_data[base_end_arr[0]])
     intercept = y_data[base_end_arr[0]] - slope*x_data[base_end_arr[0]]
     def plateau_baseline_fit(x):
+        """Calculates points along the fitted line.
+
+        Args:
+            x (float): x position.
+
+        Returns:
+            y (float): Corresponding y position along the fitted line.
+
+        """
         return slope*x+intercept
     return plateau_baseline_fit, slope, intercept
 
 def fit_baseline(x_data, y_smooth, base_end_arr):
+    """Performs a baseline correction to a plateau feature.
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        base_end_arr (numpy arr): An array containing the indices of the exterior
+            base points of the feature.
+
+    Returns:
+        y_smooth_blc (numpy arr): The baseline corrected smoothed y data.
+        baseline_correction (numpy arr): The applied baseline correction.
+
+    """
     # Create an array to store the baseline correction
     baseline_correction = np.zeros(len(x_data))
 
@@ -350,7 +491,6 @@ def fit_baseline(x_data, y_smooth, base_end_arr):
     plateau_baseline = plateau_baseline_fit(x_plateau)
     baseline_correction[base_end_arr[0]:base_end_arr[1]+1] = plateau_baseline   
 
-    
     # Left side
     if base_end_arr[0] > 0:    
         # Prepare the outer edge data (center them so the base endpoints are at 0,0)
@@ -364,6 +504,7 @@ def fit_baseline(x_data, y_smooth, base_end_arr):
         lm_left.predict(x_left_centered[:-1].reshape(-1,1)) +  y_smooth[base_end_arr[0]]
     else:
         pass
+
     # Right side    
     if base_end_arr[1] < len(x_data)-1:    
         # Prepare the outer edge data (center them so the base endpoints are at 0,0)
@@ -382,26 +523,35 @@ def fit_baseline(x_data, y_smooth, base_end_arr):
 
 # Half Max Calculation Methods
 def calculate_half_max(edge_max, edge_min):
-    """
-    calculate_half_max(edge_max, edge_min)
+    """Calculates the half max of the edge given the max and min values of the 
+    edge.
 
-    Calculates the half max of the edge given the max and min values of the edge
-
-    Arguments:
+    Args:
+        edge_max (float): The maximum value of the edge (height).
+        edge_min (float): The minimum value of the edge (base).
 
     Returns:
+        half_max (float): The midpoint value of the provided max/min.
+
     """
     return (edge_max-edge_min)/2.0 + edge_min
 
 def find_half_max_neighbors(half_max, y_data, direction, left_bound, right_bound):
-    """
-    find_half_max_neighbors(half_max, y_data, direction, left_bound, right_bound)
+    """Finds the neighboring points of the half max value.
 
-    Finds the neighboring points of the half max value.
-
-    Arguments:
+    Args:
+        half_max (float): The half max value of the edge. 
+        y_data (arr-like): The y (height) data.
+        direction (int): The slope of the edge (+1 if rising, -1 if falling).
+        left_bound (int): The index of the lower bound of the search.
+        right_bound (int): The index of the upper bound of the search.
 
     Returns:
+        left_neighbor (int): The index of the x position left-bounding the half
+            max.
+        right_neighbor (int): The index of the x position right-bounding the half
+            max.
+
     """
     i = 0
     j = -1
@@ -420,15 +570,19 @@ def find_half_max_neighbors(half_max, y_data, direction, left_bound, right_bound
         return(right_bound-j+1,right_bound-i+1)
 
 def find_half_max_pos(half_max, half_max_bounds, x_data, y_data):
-    """
-    find_half_max_pos(half_max, half_max_bounds, x_data, y_data)
+    """Calculates a linear fit using the neighboring points of the half max 
+    value, and uses this fit to extrapolate the x position of the half max value.
 
-    Calculates a linear fit using the neighboring points of the half max value,
-    and uses this fit to extrapolate the x position of the half max value.
-
-    Arguments:
+    Args:
+        half_max (float): The half max value of the edge.
+        half_max_bounds (tuple): The indices of the x positions bounding the half
+            max value. 
+        x_data (arr-like): The x (position) data.
+        y_data (arr-like): The y (height) data.
 
     Returns:
+        half_max_pos (float): The extrapolated x position for the half max value.
+
     """
     slope = (y_data[half_max_bounds[0]]-y_data[half_max_bounds[1]])/(x_data[half_max_bounds[0]]-x_data[half_max_bounds[1]])
     intercept = y_data[half_max_bounds[0]] - slope*x_data[half_max_bounds[0]]
@@ -437,6 +591,20 @@ def find_half_max_pos(half_max, half_max_bounds, x_data, y_data):
 
 # Width calculation methods
 def calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr):
+    """Calculates the positions of the half maxes of the plateau feature.
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        base_loc_arr (numpy arr): An array of the base locations (indices) of 
+            the 1st deriative peaks.
+
+    Returns:
+        half_max_pos (numpy arr): The extrapolated x positions for the half max 
+            values.
+        half_max_vals (numpy arr): The half max values of the edges.
+
+    """
     # Figure out the min and max values of the edges
     rising_peak_min = np.min(y_smooth[base_loc_arr[0]:base_loc_arr[1]+1]) 
     rising_peak_max = np.max(y_smooth[base_loc_arr[0]:base_loc_arr[1]+1])
@@ -465,6 +633,26 @@ def calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr):
 
 
 def calculate_half_max_full_width(x_data, y_smooth, base_loc_arr, verbose=False):
+    """Calculates the distance between two half max points (half max full width).
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        base_loc_arr (numpy arr): An array of the base locations (indices) of 
+            the 1st derivative peaks.
+        verbose (bool): If True, saves half max data in base_dict. (Default 
+            value = False)
+
+    Returns:
+        width (float): The distance between the two half max points.
+        half_max_dict (dict): Contains auxiliary information.
+            error_string (str): Records an error if the width was negative.
+            half_max_positions (numpy arr): The extrapolated x positions for the 
+                half max values. Present if verbose=TRUE.
+            half_max_vals (numpy arr): The half max values of the edges. Present 
+                if verbose=TRUE.
+
+    """
     half_max_pos, half_max_vals = \
     calculate_half_max_full_width_pos(x_data, y_smooth, base_loc_arr)
 
@@ -486,7 +674,38 @@ def calculate_half_max_full_width(x_data, y_smooth, base_loc_arr, verbose=False)
     return width, half_max_dict
 
 def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index, verbose=False):
+    base_func, base_params, verbose=False):
+    """Calculates the width of a plateau with the specified base function.
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        smooth_func (func): A smoothing function.
+        smooth_params (tuple): Parameters for smooth_func.
+        base_func (func): The function to find the base locations of the 1st 
+            derivative. find_base_d1 or find_base_d2.
+        base_params (tuple): Parameters for the specified base_func.
+        verbose: Records auxiliary information in base_dict if True. (Default 
+            value = False)
+
+    Returns:
+        width (float): The distance between the two half max points.
+        base_dict (dict): Contains error messages and auxiliary information.
+            error_string (str): Records any errors that may have occurred.
+            d1_data (tuple): A tuple of 1st derivative data. Present if verbose=TRUE.
+                x_d1 (numpy arr): 1st derivative x positions.
+                y_smooth_d1 (numpy arr): 1st derivative of the smoothed y data.
+                y_smooth_d1_s (numpy arr): Smoothed 1st derivative.
+            d1_peak_list (list): A list of 1st derivative peak locations 
+                (x indices). Present if verbose=TRUE.
+            base_loc_arr (numpy arr): An array of the base locations (indices) of 
+                the 1st deriative peaks. Present if verbose=TRUE.
+            half_max_positions (numpy arr): The extrapolated x positions for the 
+                half max values. Present if verbose=TRUE.
+            half_max_vals (numpy arr): The half max values of the edges. Present 
+                if verbose=TRUE.
+
+    """
     # Calculate the first derivative
     x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
     # Smooth the first derivative
@@ -511,7 +730,7 @@ def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
         # Adjust the indices (for the 2nd derivative method)
         for i in range(len(base_dict["suprema_string"])):
             if base_dict["suprema_string"][i] == "1":
-                base_loc_arr[i] = base_loc_arr[i] + adjust_index
+                base_loc_arr[i] = base_loc_arr[i] + 1
             else:
                 pass
 
@@ -535,7 +754,42 @@ def calculate_width_min_max(x_data, y_smooth, smooth_func, smooth_params, \
     return width, base_dict
 
 def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params, \
-    base_func, base_params, adjust_index, verbose=False): 
+    base_func, base_params, verbose=False): 
+    """Performs a baseline correction and then calculates the width of a plateau 
+    with the specified base function.
+
+    Args:
+        x_data (arr-like): The x (position) data.
+        y_smooth (numpy arr): The smoothed y (height) data.
+        smooth_func (func): A smoothing function.
+        smooth_params (tuple): Parameters for smooth_func.
+        base_func (func): The function to find the base locations of the 1st 
+            derivative. find_base_d1 or find_base_d2.
+        base_params (tuple): Parameters for the specified base_func.
+        verbose: Records auxiliary information in base_dict if True. (Default 
+            value = False)
+
+    Returns:
+        width (float): The distance between the two half max points.
+        base_dict (dict): Contains error messages and auxiliary information. If 
+            verbose=TRUE, also contains auxiliary information used for the 
+            baseline correction (keys end in '_blc').
+            error_string (str): Records any errors that may have occurred.
+            d1_data (tuple): A tuple of 1st derivative data. Present if verbose=TRUE.
+                x_d1 (numpy arr): 1st derivative x positions.
+                y_smooth_d1 (numpy arr): 1st derivative of the smoothed y data.
+                y_smooth_d1_s (numpy arr): Smoothed 1st derivative.
+            d1_peak_list (list): A list of 1st derivative peak locations 
+                (x indices). Present if verbose=TRUE.
+            base_loc_arr (numpy arr): An array of the base locations (indices) of 
+                the 1st deriative peaks. Present if verbose=TRUE.
+            half_max_positions (numpy arr): The extrapolated x positions for the 
+                half max values. Present if verbose=TRUE.
+            half_max_vals (numpy arr): The half max values of the edges. Present 
+                if verbose=TRUE.
+
+
+    """
     # Calculate the first derivative
     x_d1, y_smooth_d1 = central_diff(x_data, y_smooth)
     # Smooth the first derivative
@@ -555,7 +809,7 @@ def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params,
     # Adjust the indices (for the 2nd derivative method)
     for i in range(len(base_dict_blc["suprema_string"])):
         if base_dict_blc["suprema_string"][i] == "1":
-            base_loc_arr_blc[i] = base_loc_arr_blc[i] + adjust_index
+            base_loc_arr_blc[i] = base_loc_arr_blc[i] + 1
         else:
             pass
 
@@ -570,8 +824,7 @@ def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params,
         
         # Calculate the width
         width, base_dict = calculate_width_min_max(x_data, y_smooth_blc, \
-            smooth_func, smooth_params, base_func, base_params, adjust_index, \
-            verbose=verbose)
+            smooth_func, smooth_params, base_func, base_params, verbose=verbose)
 
         if verbose:
             # Add the blc dict to the base_dict
@@ -593,6 +846,26 @@ def calc_width_baseline_correction(x_data, y_smooth, smooth_func, smooth_params,
 
 # Reading settings
 def read_TEM_length_settings(settings_path):
+    """Used to read in custom TEM_length settings. If settings are not specified
+    in the settings file, default values are used.
+
+    Args:
+        settings_path (str): Path to a settings .txt file. 
+
+    Returns:
+        smooth_method (str): The smoothing method. Currently only uses
+            'savgol'.
+        smooth_func (func): A smoothing function.
+        smooth_params (tuple): Parameters for smooth_func.
+        width_method (str): The width calculation method. Currently only uses
+            'min_max'.
+        base_method (str): Which base method to use. '1st derivative threshold'
+            or '2nd derivative threshold'.
+        base_func (func): The function to find the base locations of the 1st 
+            derivative. find_base_d1 or find_base_d2.
+        base_params (tuple): Parameters for the specified base_func.
+
+    """
     # Default settings
     smooth_method = "savgol"
     smooth_func = signal.savgol_filter
@@ -605,9 +878,6 @@ def read_TEM_length_settings(settings_path):
     max_steps = 20
     d2_threshold = 0.5
     base_params = (step_size, threshold, max_steps)
-    # x position of 2nd derivative is shifted by 1 from the x position of 
-    # the TEM profile
-    adjust_index = 1 
 
     # Handle custom settings
     if settings_path == "default":
@@ -627,6 +897,8 @@ def read_TEM_length_settings(settings_path):
                         smooth_params = (*smooth_params_list, )
                     elif line_list[0] == "step_size" and line_list[1] != "default":
                         step_size = int(line_list[1])
+                        if step_size < 1:
+                            raise ValueError("ValueError: step size must be >= 1.")
                     elif line_list[0] == "threshold" and line_list[1] != "default":
                         threshold = int(line_list[1])
                     elif line_list[0] == "max_steps" and line_list[1] != "default":
@@ -647,7 +919,7 @@ def read_TEM_length_settings(settings_path):
                         smooth_func, smooth_params)
                 else:
                     raise ValueError("ValueError: Suppled base finding method " \
-                        + "not recognized. Please use '1st derivative zero " \
+                        + "not recognized. Please use '1st derivative " \
                         + "threshold' or '2nd derivative threshold'.")
             except (ValueError) as msg:
                 print(msg)
@@ -655,12 +927,41 @@ def read_TEM_length_settings(settings_path):
                 sys.exit(1)
 
     return (smooth_method, smooth_func, smooth_params, width_method, base_method, \
-        base_func, base_params, adjust_index)
+        base_func, base_params)
 
 # Writing Output Files
 def write_header(custom_name, file_name, smooth_method, smooth_params, \
     base_method, base_params, use_baseline, width_method, error_list, \
     summary_stats, note):
+    """Writes a header file of the methods used and summary statistics of the
+    analysis.
+
+    Args:
+        custom_name (str): Appends the custom name to the end of the file. 
+        file_name (str): The name of the read file.
+        smooth_method (str): The smoothing method. Currently only uses
+            'savgol'.
+        smooth_params (tuple): Parameters for smooth_func.
+        base_method (str): Which base method to use. '1st derivative threshold'
+            or '2nd derivative threshold'.
+        base_params (tuple): Parameters for the specified base_func.
+        use_baseline:
+        width_method (str): The width calculation method. Currently only uses
+            'min_max'.
+        error_list (list): A list of all the errors generated.
+        summary_stats (tuple): 
+            num_samples (int): The total number of measurements.
+            summary_num_samples (int): The number of measurements used for the
+                mean, median, and sample standard deviation.
+            mean (float): The mean of the widths.
+            median (float): The median of the widths.
+            sample_stdev (float): The sample standard deviation of the widths.
+        note (str): A custom note.
+
+    Returns:
+        None. Outputs a .txt header file.
+
+    """
     if len(custom_name) > 0:
         add_name = f"_{custom_name}"
     else:
@@ -697,6 +998,17 @@ def write_header(custom_name, file_name, smooth_method, smooth_params, \
             header_file.write(f"{error}\n")
 
 def write_measurement_data(custom_name, file_name, width_array):
+    """Writes the calculated widths to a .txt file.
+
+    Args:
+        custom_name (str): Appends the custom name to the end of the file. 
+        file_name (str): The name of the read file.
+        width_array (numpy arr): Contains all the calculated widths. 
+
+    Returns:
+        None. Outputs a .txt data file.
+
+    """
     if len(custom_name) > 0:
         add_name = f"_{custom_name}"
     else:
@@ -706,6 +1018,16 @@ def write_measurement_data(custom_name, file_name, width_array):
             data_file.write(f"{width}\t")
 
 def TEM_length_main():
+    """Handles commandline input and runs width calculation analyses of a 
+    supplied file of plateau data.
+
+    Args: 
+        None. Uses commandline input.
+
+    Returns:
+        None. Outputs header and data .txt files.
+
+    """
     # Argument parser
     parser = argparse.ArgumentParser(description="Takes in an excel or txt file of TEM \
         grayscale profiles and computes the lengths of the objects using a half \
@@ -762,7 +1084,7 @@ def TEM_length_main():
     else:
         settings_path = "default"
     smooth_method, smooth_func, smooth_params, width_method, base_method, \
-    base_func, base_params, adjust_index = read_TEM_length_settings(settings_path)
+    base_func, base_params = read_TEM_length_settings(settings_path)
 
     # Read in the note
     if args.note:
@@ -782,10 +1104,10 @@ def TEM_length_main():
         progress = False
 
     # Read the file in 
-    length_df = read_TEM_data(read_file_path, transpose=is_transpose)
+    TEM_df = read_TEM_data(read_file_path, transpose=is_transpose)
 
     # Get the shape
-    rows, cols = length_df.shape
+    rows, cols = TEM_df.shape
     num_samples = int(cols/2)
     
     # Create array/list to store the widths and errors
@@ -802,16 +1124,16 @@ def TEM_length_main():
         # Pick the x columns
         x_index = 2*i
         # Remove the NaN values
-        x_data, y_data = exclude_NaN(x_index, length_df)
+        x_data, y_data = exclude_NaN(x_index, TEM_df)
         # Smooth the function
         y_smooth = smooth_func(y_data, *smooth_params)
         # Calculate the width
         if use_baseline:
             width, base_dict = calc_width_baseline_correction(x_data, y_smooth, \
-                smooth_func, smooth_params, base_func, base_params, adjust_index)
+                smooth_func, smooth_params, base_func, base_params)
         else:
             width, base_dict = calculate_width_min_max(x_data, y_smooth, \
-                smooth_func, smooth_params, base_func, base_params, adjust_index)
+                smooth_func, smooth_params, base_func, base_params)
         # Record the data
         width_array[i] = width
         # Record any errors
@@ -844,96 +1166,3 @@ def TEM_length_main():
 
 if __name__ == "__main__":
     TEM_length_main()
-    
-    # i = 11
-    # # for i in range(13):
-    # print(f"sample {i}")
-    # # Pick the x columns
-    # x_index = 2*i
-    # # Remove the NaN values
-    # x_data, y_data = exclude_NaN(x_index, length_df)
-    # # Smooth the function
-    # y_smooth = smooth_func(y_data, *smooth_params)
-    # # Calculate the width
-    # width, error_string = calculate_width_min_max(x_data, y_smooth, \
-    #     smooth_func, smooth_params, base_func, base_params, adjust_index)
-    # print(f"width: {width}")
-    # print(f"error_string: {error_string}")
-    # # Record the data
-    # width_array[i] = width
-    # # Record any errors
-    # if len(error_string)>0:
-    #     error_message = f"Sample: {i} {error_string}"
-    #     error_list.append(error_message)
-    #     print(f"error_message: {error_message}")
-    # else:
-    #     pass
-
-    # # Serial analysis (no baseline correction)
-    # for i in range(num_samples):
-    #     print(i)
-    #     # Pick the x columns
-    #     x_index = 2*i
-    #     # Remove the NaN values
-    #     x_data, y_data = exclude_NaN(x_index, length_df)
-    #     # Smooth the function
-    #     y_smooth = smooth_func(y_data, *smooth_params)
-    #     # Calculate the width
-    #     width, error_string = calculate_width_min_max(x_data, y_smooth, \
-    #         smooth_func, smooth_params, base_func, base_params, adjust_index)
-    #     # Record the data
-    #     width_array[i] = width
-    #     # Record any errors
-    #     if len(error_string)>0:
-    #         error_message = f"Sample: {i} {error_string}"
-    #         error_list.append(error_message)
-    #         print(error_message)
-    #     else:
-    #         pass
-
-    # i = 11
-    # # for i in range(13):
-    # print(f"sample {i}")
-    # # Pick the x columns
-    # x_index = 2*i
-    # # Remove the NaN values
-    # x_data, y_data = exclude_NaN(x_index, length_df)
-    # # Smooth the function
-    # y_smooth = smooth_func(y_data, *smooth_params)
-    # # Calculate the width
-    # width, error_string = calc_width_baseline_correction(x_data, y_smooth, \
-    #     smooth_func, smooth_params, base_func, base_params, adjust_index)
-    # print(f"width: {width}")
-    # print(f"error_string: {error_string}")
-    # # Record the data
-    # width_array[i] = width
-    # # Record any errors
-    # if len(error_string)>0:
-    #     error_message = f"Sample: {i} {error_string}"
-    #     error_list.append(error_message)
-    #     print(f"error_message: {error_message}")
-    # else:
-    #     pass
-
-    # Serial analysis (baseline correction)
-    # for i in range(num_samples):
-    #     print(i)
-    #     # Pick the x columns
-    #     x_index = 2*i
-    #     # Remove the NaN values
-    #     x_data, y_data = exclude_NaN(x_index, length_df)
-    #     # Smooth the function
-    #     y_smooth = smooth_func(y_data, *smooth_params)
-    #     # Calculate the width
-    #     width, error_string = calc_width_baseline_correction(x_data, y_smooth, \
-    #         smooth_func, smooth_params, base_func, base_params, adjust_index)
-    #     # Record the data
-    #     width_array[i] = width
-    #     # Record any errors
-    #     if len(error_string)>0:
-    #         error_message = f"Sample: {i} {error_string}"
-    #         error_list.append(error_message)
-    #         print(error_message)
-    #     else:
-    #         pass
-    # 
